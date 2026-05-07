@@ -1,98 +1,156 @@
-import { useState, useEffect } from 'react';
-import { supabase } from './supabase';
+import { useState } from 'react'
 
-function App() {
-  const [nome, setNome] = useState('');
-  const [preco, setPreco] = useState('');
-  const [produtos, setProdutos] = useState([]);
+import Produtos from './components/Produtos'
+import Clientes from './components/Clientes'
+import PDV from './components/PDV'
+import Financeiro from './components/Financeiro'
+import Relatorios from './components/Relatorios'
 
-  // 🔹 Buscar produtos ao carregar tela
-  useEffect(() => {
-    buscarProdutos();
-  }, []);
+export default function App() {
 
-  async function buscarProdutos() {
-    const { data, error } = await supabase
-      .from('produtos')
-      .select('*')
-      .order('id', { ascending: false });
+  const [tela, setTela] = useState('pdv')
 
-    if (error) {
-      console.log("ERRO AO BUSCAR:", error);
-    } else {
-      setProdutos(data);
-    }
-  }
+  function renderTela() {
+    switch (tela) {
+      case 'produtos':
+        return <Produtos />
 
-  // 🔹 Cadastrar produto
-  async function cadastrarProduto() {
-    const { error } = await supabase
-      .from('produtos')
-      .insert([
-        {
-          nome: nome,
-          preco: Number(preco)
-        }
-      ]);
+      case 'clientes':
+        return <Clientes />
 
-    if (error) {
-      console.log("ERRO:", error);
-      alert("Erro ao cadastrar!");
-    } else {
-      alert("Produto cadastrado!");
+      case 'pdv':
+        return <PDV />
 
-      setNome('');
-      setPreco('');
+      case 'financeiro':
+        return <Financeiro />
 
-      // 🔥 atualiza lista automaticamente
-      buscarProdutos();
+      case 'relatorios':
+        return <Relatorios />
+
+      default:
+        return <PDV />
     }
   }
 
   return (
-    <div style={{ padding: 20 }}>
-      <h1>Sistema de Farmácia 💊</h1>
+    <div style={styles.layout}>
 
-      <h2>Cadastro</h2>
+      {/* MENU */}
+      <aside style={styles.sidebar}>
 
-      <input
-        type="text"
-        placeholder="Nome do produto"
-        value={nome}
-        onChange={(e) => setNome(e.target.value)}
-      />
-
-      <br /><br />
-
-      <input
-        type="number"
-        placeholder="Preço"
-        value={preco}
-        onChange={(e) => setPreco(e.target.value)}
-      />
-
-      <br /><br />
-
-      <button onClick={cadastrarProduto}>
-        Cadastrar
-      </button>
-
-      <hr />
-
-      <h2>Produtos cadastrados</h2>
-
-      {produtos.map((produto) => (
-        <div key={produto.id} style={{
-          border: '1px solid #ccc',
-          padding: 10,
-          marginBottom: 10
-        }}>
-          <strong>{produto.nome}</strong> <br />
-          R$ {produto.preco}
+        <div style={styles.logo}>
+          💊 Farmafy
         </div>
-      ))}
+
+        <button
+          style={tela === 'pdv'
+            ? styles.menuAtivo
+            : styles.menuBtn}
+          onClick={() => setTela('pdv')}
+        >
+          🛒 PDV
+        </button>
+
+        <button
+          style={tela === 'produtos'
+            ? styles.menuAtivo
+            : styles.menuBtn}
+          onClick={() => setTela('produtos')}
+        >
+          📦 Produtos
+        </button>
+
+        <button
+          style={tela === 'clientes'
+            ? styles.menuAtivo
+            : styles.menuBtn}
+          onClick={() => setTela('clientes')}
+        >
+          👥 Clientes
+        </button>
+
+        <button
+          style={tela === 'financeiro'
+            ? styles.menuAtivo
+            : styles.menuBtn}
+          onClick={() => setTela('financeiro')}
+        >
+          💰 Financeiro
+        </button>
+
+        <button
+          style={tela === 'relatorios'
+            ? styles.menuAtivo
+            : styles.menuBtn}
+          onClick={() => setTela('relatorios')}
+        >
+          📊 Relatórios
+        </button>
+
+      </aside>
+
+      {/* CONTEÚDO */}
+      <main style={styles.content}>
+        {renderTela()}
+      </main>
+
     </div>
-  );
+  )
 }
 
-export default App;
+const styles = {
+
+  layout: {
+    display: 'flex',
+    minHeight: '100vh',
+    background: '#f1f5f9',
+    fontFamily: 'Arial'
+  },
+
+  sidebar: {
+    width: 240,
+    background: '#0f172a',
+    color: '#fff',
+    padding: 20,
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 10
+  },
+
+  logo: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    marginBottom: 30
+  },
+
+  menuBtn: {
+    background: 'transparent',
+    color: '#fff',
+    border: 'none',
+    padding: 14,
+    borderRadius: 10,
+    cursor: 'pointer',
+    textAlign: 'left',
+    fontSize: 15,
+    transition: '.2s'
+  },
+
+  menuAtivo: {
+    background: '#0d7a45',
+    color: '#fff',
+    border: 'none',
+    padding: 14,
+    borderRadius: 10,
+    cursor: 'pointer',
+    textAlign: 'left',
+    fontSize: 15,
+    fontWeight: 'bold'
+  },
+
+  content: {
+    flex: 1,
+    padding: 20,
+    overflowY: 'auto'
+  }
+
+}
