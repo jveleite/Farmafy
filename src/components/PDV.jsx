@@ -1,16 +1,19 @@
+
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../supabase";
 
 export default function PDV() {
+
   const [produtos, setProdutos] = useState([]);
+  const [clientes, setClientes] = useState([]);
+  const [clienteSelecionado, setClienteSelecionado] = useState("");
   const [busca, setBusca] = useState("");
   const [carrinho, setCarrinho] = useState([]);
   const [pagamento, setPagamento] = useState("PIX");
   const [toast, setToast] = useState(null);
   const [finalizando, setFinalizando] = useState(false);
-  // ─────────────────────────────────────────
+
   // Buscar produtos
-  // ─────────────────────────────────────────
   async function buscarProdutos() {
     const { data, error } = await supabase
       .from("produtos")
@@ -23,8 +26,21 @@ export default function PDV() {
     }
   }
 
+  // Buscar clientes
+  async function buscarClientes() {
+    const { data, error } = await supabase
+      .from("clientes")
+      .select("*")
+      .order("nome");
+
+    if (!error) {
+      setClientes(data || []);
+    }
+  }
+
   useEffect(() => {
     buscarProdutos();
+    buscarClientes();
   }, []);
 
   // ─────────────────────────────────────────
@@ -134,11 +150,12 @@ export default function PDV() {
     const { data: venda, error: erroVenda } = await supabase
       .from("vendas")
       .insert({
-        total,
-        pagamento,
-        recebido: total,
-        troco: 0
-      })
+  cliente_id: clienteSelecionado || null,
+  total,
+  pagamento,
+  recebido: total,
+  troco: 0
+})
       .select()
       .single();
 
@@ -177,6 +194,7 @@ export default function PDV() {
     mostrarToast("Venda finalizada!");
 
     setCarrinho([]);
+    setClienteSelecionado("");
 
     buscarProdutos();
 
@@ -311,6 +329,22 @@ export default function PDV() {
         </div>
 
         <div style={styles.footer}>
+          <select
+  value={clienteSelecionado}
+  onChange={(e) => setClienteSelecionado(e.target.value)}
+  style={{ ...styles.select, marginBottom: 10 }}
+>
+  <option value="">Cliente não identificado</option>
+
+  {clientes.map(cliente => (
+    <option
+      key={cliente.id}
+      value={cliente.id}
+    >
+      {cliente.nome}
+    </option>
+  ))}
+</select>
           <select
             value={pagamento}
             onChange={(e) => setPagamento(e.target.value)}
