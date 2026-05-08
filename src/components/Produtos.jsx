@@ -1,3 +1,4 @@
+import BuscaProduto from "./BuscaProduto";
 import { useState, useEffect } from "react";
 import { supabase } from "../supabase";
 
@@ -197,12 +198,27 @@ export default function Produtos() {
       <div style={styles.secHeader}>
         <span style={styles.secTitulo}>📦 Produtos ({lista.length})</span>
         <div style={{ display: "flex", gap: 8, flex: 1, justifyContent: "flex-end", flexWrap: "wrap" }}>
-          <input
-            value={busca}
-            onChange={e => setBusca(e.target.value)}
-            placeholder="🔍 Buscar por nome, princípio ativo..."
-            style={{ ...styles.input, width: 260 }}
-          />
+          <BuscaProduto
+            busca={busca}
+            setBusca={setBusca}
+            onProdutoEncontrado={(dados) => {
+              setEditando(null);
+
+              setForm({
+                nome: dados.nome,
+                principio_ativo: dados.principio_ativo,
+                categoria: dados.categoria || "Outros",
+                codigo_barras: dados.codigo_barras,
+                estoque: "",
+                estoque_minimo: 10,
+                preco_compra: "",
+                preco: "",
+                validade: ""
+              });
+
+    setModal(true);
+            }}
+/>
           <button style={styles.btnVerde} onClick={abrirNovo}>+ Novo produto</button>
         </div>
       </div>
