@@ -1,544 +1,695 @@
-
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "../supabase";
 
+// ─── Ícones inline (sem dependência extra) ────────────────────────────────────
+const Icon = {
+  pix:     () => <span style={{ fontSize: 18 }}>⚡</span>,
+  money:   () => <span style={{ fontSize: 18 }}>💵</span>,
+  card:    () => <span style={{ fontSize: 18 }}>💳</span>,
+  cart:    () => <span style={{ fontSize: 18 }}>🛒</span>,
+  search:  () => <span style={{ fontSize: 16 }}>🔍</span>,
+  trash:   () => <span style={{ fontSize: 14 }}>🗑️</span>,
+  user:    () => <span style={{ fontSize: 14 }}>👤</span>,
+  spinner: () => (
+    <span style={{
+      display: "inline-block",
+      width: 16, height: 16,
+      border: "2px solid rgba(255,255,255,.4)",
+      borderTop: "2px solid #fff",
+      borderRadius: "50%",
+      animation: "spin .7s linear infinite",
+      verticalAlign: "middle",
+      marginRight: 6
+    }} />
+  ),
+};
+
+const PAGAMENTOS = [
+  { value: "PIX",      label: "PIX",      icon: Icon.pix   },
+  { value: "Dinheiro", label: "Dinheiro", icon: Icon.money  },
+  { value: "Cartão",   label: "Cartão",   icon: Icon.card   },
+];
+
+// ─── Componente principal ─────────────────────────────────────────────────────
 export default function PDV() {
 
-  const [produtos, setProdutos] = useState([]);
-  const [clientes, setClientes] = useState([]);
-  const [clienteSelecionado, setClienteSelecionado] = useState("");
-  const [busca, setBusca] = useState("");
-  const [carrinho, setCarrinho] = useState([]);
-  const [pagamento, setPagamento] = useState("PIX");
-  const [toast, setToast] = useState(null);
-  const [finalizando, setFinalizando] = useState(false);
+  const [produtos, setProdutos]               = useState([]);
+  const [clientes, setClientes]               = useState([]);
+  const [clienteSelecionado, setClienteSelecionado] = useState(null); // { id, nome }
+  const [buscaCliente, setBuscaCliente]       = useState("");
+  const [busca, setBusca]                     = useState("");
+  const [carrinho, setCarrinho]               = useState([]);
+  const [pagamento, setPagamento]             = useState("PIX");
+  const [toast, setToast]                     = useState(null);
+  const [finalizando, setFinalizando]         = useState(false);
+  const [flashIds, setFlashIds]               = useState(new Set()); // cards com flash
+  const [confirmLimpar, setConfirmLimpar]     = useState(false);
+  const dropdownRef                           = useRef(null);
+  const toastTimer                            = useRef(null);
 
-  // Buscar produtos
+  // ── Fechar dropdown ao clicar fora ──────────────────────────────────────────
+  useEffect(() => {
+    function handle(e) {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target))
+        setBuscaCliente("");
+    }
+    document.addEventListener("mousedown", handle);
+    return () => document.removeEventListener("mousedown", handle);
+  }, []);
+
+  // ── Busca inicial ────────────────────────────────────────────────────────────
+  useEffect(() => {
+    buscarProdutos();
+    buscarClientes();
+  }, []);
+
   async function buscarProdutos() {
     const { data, error } = await supabase
       .from("produtos")
       .select("*")
       .gt("estoque", 0)
       .order("nome");
-
-    if (!error) {
-      setProdutos(data || []);
-    }
+    if (!error) setProdutos(data || []);
   }
 
-  // Buscar clientes
   async function buscarClientes() {
     const { data, error } = await supabase
       .from("clientes")
       .select("*")
       .order("nome");
-
-    if (!error) {
-      setClientes(data || []);
-    }
+    if (!error) setClientes(data || []);
   }
 
-  useEffect(() => {
-    buscarProdutos();
-    buscarClientes();
-  }, []);
-
-  // ─────────────────────────────────────────
-  // Adicionar produto
-  // ─────────────────────────────────────────
-  function adicionarProduto(produto) {
-
-  const existe = carrinho.find(i => i.id === produto.id);
-
-  // quantidade atual no carrinho
-  const qtdAtual = existe ? existe.quantidade : 0;
-
-  // impedir ultrapassar estoque
-  if (qtdAtual >= produto.estoque) {
-    mostrarToast("Estoque insuficiente.", "erro");
-    return;
-  }
-
-  if (existe) {
-    setCarrinho(carrinho.map(i =>
-      i.id === produto.id
-        ? { ...i, quantidade: i.quantidade + 1 }
-        : i
-    ));
-  } else {
-    setCarrinho([
-      ...carrinho,
-      {
-        ...produto,
-        quantidade: 1
-      }
-    ]);
-  }
-}
-
-  // ─────────────────────────────────────────
-  // Alterar quantidade
-  // ─────────────────────────────────────────
-  function alterarQuantidade(id, tipo) {
-  setCarrinho(carrinho.map(item => {
-
-    if (item.id !== id) return item;
-
-    // impedir passar do estoque
-    if (
-      tipo === "mais" &&
-      item.quantidade >= item.estoque
-    ) {
-      mostrarToast("Estoque insuficiente.", "erro");
-      return item;
-    }
-
-    const novaQtd =
-      tipo === "mais"
-        ? item.quantidade + 1
-        : item.quantidade - 1;
-
-    return {
-      ...item,
-      quantidade: novaQtd < 1 ? 1 : novaQtd
-    };
-  }));
-}
-
-  // ─────────────────────────────────────────
-  // Remover item
-  // ─────────────────────────────────────────
-  function removerItem(id) {
-    setCarrinho(carrinho.filter(i => i.id !== id));
-  }
-
-  // ─────────────────────────────────────────
-  // Total
-  // ─────────────────────────────────────────
+  // ── Toast ────────────────────────────────────────────────────────────────────
   function mostrarToast(msg, tipo = "ok") {
-
-  setToast({
-    msg,
-    tipo
-  });
-
-  setTimeout(() => {
-    setToast(null);
-  }, 3000);
-}
-  const total = useMemo(() => {
-    return carrinho.reduce((acc, item) => {
-      return acc + (item.preco * item.quantidade);
-    }, 0);
-  }, [carrinho]);
-
-  // ─────────────────────────────────────────
-  // Finalizar venda
-  // ─────────────────────────────────────────
-  async function finalizarVenda() {
-
-  if (carrinho.length === 0) {
-    mostrarToast("Carrinho vazio.", "erro");
-    return;
+    clearTimeout(toastTimer.current);
+    setToast({ msg, tipo });
+    toastTimer.current = setTimeout(() => setToast(null), 3000);
   }
 
-  setFinalizando(true);
+  // ── Flash no card do produto ─────────────────────────────────────────────────
+  function dispararFlash(id) {
+    setFlashIds(prev => new Set(prev).add(id));
+    setTimeout(() => {
+      setFlashIds(prev => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
+    }, 500);
+  }
 
-  try {
+  // ── Carrinho ─────────────────────────────────────────────────────────────────
+  function adicionarProduto(produto) {
+    const existe = carrinho.find(i => i.id === produto.id);
+    const qtdAtual = existe ? existe.quantidade : 0;
 
-    // 1. criar venda
-    const { data: venda, error: erroVenda } = await supabase
-      .from("vendas")
-      .insert({
-  cliente_id: clienteSelecionado || null,
-  total,
-  pagamento,
-  recebido: total,
-  troco: 0
-})
-      .select()
-      .single();
-
-    if (erroVenda) throw erroVenda;
-
-    // 2. salvar itens
-    const itens = carrinho.map(item => ({
-      venda_id: venda.id,
-      produto_id: item.id,
-      quantidade: item.quantidade,
-      preco_unitario: item.preco
-    }));
-
-    const { error: erroItens } = await supabase
-      .from("itens_venda")
-      .insert(itens);
-
-    if (erroItens) throw erroItens;
-
-    // 3. baixar estoque
-    for (const item of carrinho) {
-
-      const novoEstoque =
-        item.estoque - item.quantidade;
-
-      const { error } = await supabase
-        .from("produtos")
-        .update({
-          estoque: novoEstoque
-        })
-        .eq("id", item.id);
-
-      if (error) throw error;
+    if (qtdAtual >= produto.estoque) {
+      mostrarToast("Estoque insuficiente.", "erro");
+      return;
     }
 
-    mostrarToast("Venda finalizada!");
+    dispararFlash(produto.id);
 
-    setCarrinho([]);
-    setClienteSelecionado("");
-
-    buscarProdutos();
-
-  } catch (err) {
-
-    console.error(err);
-
-    mostrarToast(
-      "Erro ao finalizar venda.",
-      "erro"
-    );
-
-  } finally {
-
-    setFinalizando(false);
-
+    if (existe) {
+      setCarrinho(c => c.map(i =>
+        i.id === produto.id ? { ...i, quantidade: i.quantidade + 1 } : i
+      ));
+    } else {
+      setCarrinho(c => [...c, { ...produto, quantidade: 1 }]);
+    }
   }
-}
 
+  function alterarQuantidade(id, tipo) {
+    setCarrinho(c => c.map(item => {
+      if (item.id !== id) return item;
 
-  // ─────────────────────────────────────────
-  // Filtro
-  // ─────────────────────────────────────────
-  const produtosFiltrados = produtos.filter(p =>
-    p.nome.toLowerCase().includes(busca.toLowerCase())
+      if (tipo === "mais" && item.quantidade >= item.estoque) {
+        mostrarToast("Estoque insuficiente.", "erro");
+        return item;
+      }
+
+      const novaQtd = tipo === "mais" ? item.quantidade + 1 : item.quantidade - 1;
+      return { ...item, quantidade: Math.max(1, novaQtd) };
+    }));
+  }
+
+  // Edição direta da quantidade pelo input
+  function editarQuantidade(id, valor) {
+    const produto = produtos.find(p => p.id === id);
+    const itemCarrinho = carrinho.find(i => i.id === id);
+    const estoqueMax = produto?.estoque ?? itemCarrinho?.estoque ?? 1;
+    const qtd = Math.min(Math.max(1, Number(valor) || 1), estoqueMax);
+
+    setCarrinho(c => c.map(i => i.id === id ? { ...i, quantidade: qtd } : i));
+  }
+
+  function removerItem(id) {
+    setCarrinho(c => c.filter(i => i.id !== id));
+  }
+
+  function limparCarrinho() {
+    setCarrinho([]);
+    setConfirmLimpar(false);
+  }
+
+  // ── Total ────────────────────────────────────────────────────────────────────
+  const total = useMemo(
+    () => carrinho.reduce((acc, i) => acc + i.preco * i.quantidade, 0),
+    [carrinho]
   );
 
-  // ─────────────────────────────────────────
-  // Render
-  // ─────────────────────────────────────────
+  // ── Filtros ──────────────────────────────────────────────────────────────────
+  const produtosFiltrados = useMemo(() =>
+    produtos.filter(p => p.nome.toLowerCase().includes(busca.toLowerCase())),
+    [produtos, busca]
+  );
 
- return (
-  <>
-    <div style={styles.container}>
+  const clientesFiltrados = useMemo(() => {
+    const q = buscaCliente.toLowerCase();
+    return clientes.filter(c =>
+      c.nome?.toLowerCase().includes(q) || c.telefone?.includes(q)
+    );
+  }, [clientes, buscaCliente]);
 
-      {/* PRODUTOS */}
-      <div style={styles.left}>
+  // ── Finalizar venda ───────────────────────────────────────────────────────────
+  async function finalizarVenda() {
+    if (carrinho.length === 0) {
+      mostrarToast("Carrinho vazio.", "erro");
+      return;
+    }
 
-        <div style={styles.header}>
-          <h2>🛒 PDV Farmafy</h2>
+    setFinalizando(true);
 
-          <input
-            id="busca"
-            name="busca"
-            style={styles.input}
-            placeholder="Buscar produto..."
-            value={busca}
-            onChange={(e) => setBusca(e.target.value)}
-          />
-        </div>
+    try {
+      const { data: venda, error: erroVenda } = await supabase
+        .from("vendas")
+        .insert({
+          cliente_id: clienteSelecionado?.id ?? null,
+          total,
+          pagamento,
+          recebido: total,
+          troco: 0,
+        })
+        .select()
+        .single();
 
-        <div style={styles.listaProdutos}>
-          {produtosFiltrados.map(produto => (
-            <div
-              key={produto.id}
-              style={styles.card}
-            >
-              <div>
-                <strong>{produto.nome}</strong>
+      if (erroVenda) throw erroVenda;
 
-                <div style={styles.preco}>
-                  R$ {Number(produto.preco).toFixed(2)}
-                </div>
+      const { error: erroItens } = await supabase
+        .from("itens_venda")
+        .insert(
+          carrinho.map(item => ({
+            venda_id:       venda.id,
+            produto_id:     item.id,
+            quantidade:     item.quantidade,
+            preco_unitario: item.preco,
+          }))
+        );
 
-                <div style={styles.estoque}>
-                  Estoque: {produto.estoque}
-                </div>
-              </div>
+      if (erroItens) throw erroItens;
 
-              <button
-                style={styles.botao}
-                onClick={() => adicionarProduto(produto)}
-              >
-                Adicionar
-              </button>
-            </div>
-          ))}
-        </div>
-      </div>
+      // Baixa de estoque em paralelo (mais rápido)
+      await Promise.all(
+        carrinho.map(item =>
+          supabase
+            .from("produtos")
+            .update({ estoque: item.estoque - item.quantidade })
+            .eq("id", item.id)
+        )
+      );
 
-      {/* CARRINHO */}
-      <div style={styles.right}>
+      mostrarToast("✅ Venda finalizada com sucesso!");
+      setCarrinho([]);
+      setClienteSelecionado(null);
+      buscarProdutos();
 
-        <h2>💳 Carrinho</h2>
+    } catch (err) {
+      console.error(err);
+      mostrarToast("Erro ao finalizar venda.", "erro");
+    } finally {
+      setFinalizando(false);
+    }
+  }
 
-        <div style={styles.carrinho}>
-          {carrinho.length === 0 && (
-            <div style={styles.vazio}>
-              Nenhum item no carrinho.
-            </div>
-          )}
+  // ─────────────────────────────────────────────────────────────────────────────
+  // RENDER
+  // ─────────────────────────────────────────────────────────────────────────────
+  return (
+    <>
+      {/* Keyframes globais */}
+      <style>{`
+        @keyframes spin   { to { transform: rotate(360deg); } }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes flash  { 0%,100% { background: #fff; } 50% { background: #d1fae5; } }
 
-          {carrinho.map(item => (
-            <div
-              key={item.id}
-              style={styles.item}
-            >
-              <div>
-                <strong>{item.nome}</strong>
+        .produto-card { animation: none; }
+        .produto-card.flash { animation: flash .45s ease; }
 
-                <div style={styles.subtotal}>
-                  R$ {(item.preco * item.quantidade).toFixed(2)}
-                </div>
-              </div>
+        .carrinho-item { animation: fadeIn .2s ease; }
 
-              <div style={styles.controles}>
+        .btn-pagamento {
+          flex: 1; display: flex; align-items: center; justify-content: center;
+          gap: 6px; padding: 10px 0; border-radius: 8px; border: 2px solid #e2e8f0;
+          background: #fff; cursor: pointer; font-weight: 600; font-size: 14px;
+          transition: all .15s;
+        }
+        .btn-pagamento:hover  { border-color: #0d7a45; color: #0d7a45; }
+        .btn-pagamento.ativo  { border-color: #0d7a45; background: #ecfdf5; color: #0d7a45; }
+
+        .btn-adicionar        { transition: opacity .15s; }
+        .btn-adicionar:disabled { opacity: .4; cursor: not-allowed; }
+        .btn-adicionar:not(:disabled):hover { filter: brightness(1.1); }
+
+        .cliente-item:hover   { background: #f1f5f9; }
+        
+        .btn-finalizar:not(:disabled):hover { filter: brightness(1.08); }
+        .btn-finalizar { transition: filter .15s; }
+      `}</style>
+
+      <div style={styles.container}>
+
+        {/* ── PRODUTOS ── */}
+        <div style={styles.left}>
+
+          <div style={styles.header}>
+            <h2 style={{ margin: 0 }}>🛒 PDV Farmafy</h2>
+
+            {/* Busca com botão limpar */}
+            <div style={{ position: "relative", marginTop: 12 }}>
+              <span style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)" }}>
+                <Icon.search />
+              </span>
+              <input
+                style={{ ...styles.input, paddingLeft: 36, paddingRight: busca ? 36 : 12 }}
+                placeholder="Buscar produto..."
+                value={busca}
+                onChange={e => setBusca(e.target.value)}
+              />
+              {busca && (
                 <button
-                  style={styles.btnQtd}
-                  onClick={() => alterarQuantidade(item.id, "menos")}
-                >
-                  -
-                </button>
-
-                <span>{item.quantidade}</span>
-
-                <button
-                  style={styles.btnQtd}
-                  onClick={() => alterarQuantidade(item.id, "mais")}
-                >
-                  +
-                </button>
-
-                <button
-                  style={styles.btnExcluir}
-                  onClick={() => removerItem(item.id)}
-                >
-                  ✕
-                </button>
-              </div>
+                  onClick={() => setBusca("")}
+                  style={styles.btnLimparInput}
+                  title="Limpar busca"
+                >×</button>
+              )}
             </div>
-          ))}
-        </div>
 
-        <div style={styles.footer}>
-          <select
-  value={clienteSelecionado}
-  onChange={(e) => setClienteSelecionado(e.target.value)}
-  style={{ ...styles.select, marginBottom: 10 }}
->
-  <option value="">Cliente não identificado</option>
+            <div style={{ fontSize: 13, color: "#64748b", marginTop: 6 }}>
+              {produtosFiltrados.length} produto{produtosFiltrados.length !== 1 ? "s" : ""} disponíve{produtosFiltrados.length !== 1 ? "is" : "l"}
+            </div>
+          </div>
 
-  {clientes.map(cliente => (
-    <option
-      key={cliente.id}
-      value={cliente.id}
-    >
-      {cliente.nome}
-    </option>
-  ))}
-</select>
-          <select
-            value={pagamento}
-            onChange={(e) => setPagamento(e.target.value)}
-            style={styles.select}
-          >
-            <option>PIX</option>
-            <option>Dinheiro</option>
-            <option>Cartão</option>
-          </select>
+          <div style={styles.listaProdutos}>
+            {produtosFiltrados.map(produto => {
+              const noCarrinho = carrinho.find(i => i.id === produto.id);
+              const qtdCarrinho = noCarrinho?.quantidade ?? 0;
+              const estoqueRestante = produto.estoque - qtdCarrinho;
+              const estoqueBaixo = produto.estoque <= 5;
+              const semEstoque = estoqueRestante <= 0;
 
-          <h1 style={{ marginBottom: 20 }}>
-            {total.toLocaleString("pt-BR", {
-              style: "currency",
-              currency: "BRL"
+              return (
+                <div
+                  key={produto.id}
+                  className={`produto-card${flashIds.has(produto.id) ? " flash" : ""}`}
+                  style={{
+                    ...styles.card,
+                    borderColor: estoqueBaixo ? "#fde68a" : "#e2e8f0",
+                    background: estoqueBaixo ? "#fffbeb" : "#fff",
+                  }}
+                >
+                  <div>
+                    <strong style={{ fontSize: 15 }}>{produto.nome}</strong>
+
+                    <div style={styles.preco}>
+                      {Number(produto.preco).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
+                    </div>
+
+                    <div style={{
+                      ...styles.estoque,
+                      color: estoqueBaixo ? "#b45309" : "#64748b",
+                      fontWeight: estoqueBaixo ? "bold" : "normal",
+                    }}>
+                      {estoqueBaixo ? "⚠️ " : ""}Estoque: {produto.estoque}
+                      {qtdCarrinho > 0 && (
+                        <span style={{ color: "#0d7a45", marginLeft: 6 }}>
+                          ({qtdCarrinho} no carrinho)
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  <button
+                    className="btn-adicionar"
+                    style={{
+                      ...styles.botao,
+                      background: semEstoque ? "#94a3b8" : "#0d7a45",
+                    }}
+                    onClick={() => adicionarProduto(produto)}
+                    disabled={semEstoque}
+                  >
+                    {semEstoque ? "Esgotado" : "+ Adicionar"}
+                  </button>
+                </div>
+              );
             })}
-          </h1>
 
-          <button
-            style={styles.finalizar}
-            onClick={finalizarVenda}
-            disabled={finalizando}
-          >
-            {finalizando
-              ? "Finalizando..."
-              : "Finalizar Venda"}
-          </button>
+            {produtosFiltrados.length === 0 && (
+              <div style={{ color: "#94a3b8", padding: 24, gridColumn: "1/-1" }}>
+                Nenhum produto encontrado.
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* ── CARRINHO ── */}
+        <div style={styles.right}>
+
+          {/* Cabeçalho do carrinho */}
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <h2 style={{ margin: 0 }}>💳 Carrinho
+              {carrinho.length > 0 && (
+                <span style={styles.badge}>{carrinho.reduce((a, i) => a + i.quantidade, 0)}</span>
+              )}
+            </h2>
+
+            {carrinho.length > 0 && (
+              confirmLimpar ? (
+                <div style={{ display: "flex", gap: 6, fontSize: 13 }}>
+                  <span style={{ alignSelf: "center", color: "#64748b" }}>Limpar?</span>
+                  <button onClick={limparCarrinho} style={styles.btnConfirm}>Sim</button>
+                  <button onClick={() => setConfirmLimpar(false)} style={styles.btnCancelar}>Não</button>
+                </div>
+              ) : (
+                <button onClick={() => setConfirmLimpar(true)} style={styles.btnLimparCarrinho} title="Limpar carrinho">
+                  <Icon.trash /> Limpar
+                </button>
+              )
+            )}
+          </div>
+
+          {/* Lista de itens */}
+          <div style={styles.carrinho}>
+            {carrinho.length === 0 ? (
+              <div style={styles.vazio}>
+                <div style={{ fontSize: 40, marginBottom: 8 }}>🛒</div>
+                <div>Nenhum item no carrinho.</div>
+                <div style={{ fontSize: 13, marginTop: 4, color: "#94a3b8" }}>
+                  Clique em "+ Adicionar" para começar.
+                </div>
+              </div>
+            ) : (
+              carrinho.map(item => (
+                <div key={item.id} className="carrinho-item" style={styles.item}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <strong style={{ fontSize: 14, display: "block", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                      {item.nome}
+                    </strong>
+                    <div style={{ fontSize: 13, color: "#64748b" }}>
+                      {Number(item.preco).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })} /un
+                    </div>
+                    <div style={styles.subtotal}>
+                      {(item.preco * item.quantidade).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
+                    </div>
+                  </div>
+
+                  <div style={styles.controles}>
+                    <button style={styles.btnQtd} onClick={() => alterarQuantidade(item.id, "menos")}>−</button>
+
+                    {/* Input direto de quantidade */}
+                    <input
+                      type="number"
+                      min={1}
+                      max={item.estoque}
+                      value={item.quantidade}
+                      onChange={e => editarQuantidade(item.id, e.target.value)}
+                      style={styles.inputQtd}
+                    />
+
+                    <button style={styles.btnQtd} onClick={() => alterarQuantidade(item.id, "mais")}>+</button>
+
+                    <button style={styles.btnExcluir} onClick={() => removerItem(item.id)} title="Remover">✕</button>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+
+          {/* Rodapé */}
+          <div style={styles.footer}>
+
+            {/* Seleção de cliente */}
+            <div style={{ marginBottom: 14 }} ref={dropdownRef}>
+              <label style={styles.label}><Icon.user /> Cliente</label>
+
+              {clienteSelecionado ? (
+                <div style={styles.clienteBadge}>
+                  <span>👤 {clienteSelecionado.nome}</span>
+                  <button
+                    onClick={() => setClienteSelecionado(null)}
+                    style={styles.btnRemoverCliente}
+                  >×</button>
+                </div>
+              ) : (
+                <div style={{ position: "relative" }}>
+                  <input
+                    type="text"
+                    value={buscaCliente}
+                    onChange={e => setBuscaCliente(e.target.value)}
+                    placeholder="Buscar por nome ou telefone..."
+                    style={{ ...styles.select, marginBottom: 0 }}
+                  />
+
+                  {buscaCliente && (
+                    <div style={styles.listaClientes}>
+                      <div
+                        className="cliente-item"
+                        style={styles.clienteItem}
+                        onClick={() => { setClienteSelecionado(null); setBuscaCliente(""); }}
+                      >
+                        <em style={{ color: "#94a3b8" }}>Não identificado</em>
+                      </div>
+
+                      {clientesFiltrados.length === 0 && (
+                        <div style={{ ...styles.clienteItem, color: "#94a3b8" }}>
+                          Nenhum cliente encontrado.
+                        </div>
+                      )}
+
+                      {clientesFiltrados.map(c => (
+                        <div
+                          key={c.id}
+                          className="cliente-item"
+                          style={styles.clienteItem}
+                          onClick={() => {
+                            setClienteSelecionado({ id: c.id, nome: c.nome });
+                            setBuscaCliente("");
+                          }}
+                        >
+                          <strong>{c.nome}</strong>
+                          {c.telefone && (
+                            <div style={{ fontSize: 12, color: "#64748b" }}>{c.telefone}</div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Forma de pagamento */}
+            <label style={styles.label}>Forma de pagamento</label>
+            <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+              {PAGAMENTOS.map(p => (
+                <button
+                  key={p.value}
+                  className={`btn-pagamento${pagamento === p.value ? " ativo" : ""}`}
+                  onClick={() => setPagamento(p.value)}
+                >
+                  <p.icon /> {p.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Total */}
+            <div style={{
+              ...styles.totalBox,
+              background: carrinho.length > 0 ? "#ecfdf5" : "#f8fafc",
+              borderColor: carrinho.length > 0 ? "#6ee7b7" : "#e2e8f0",
+            }}>
+              <span style={{ fontSize: 13, color: "#64748b" }}>Total</span>
+              <span style={{
+                fontSize: 28,
+                fontWeight: "bold",
+                color: carrinho.length > 0 ? "#0d7a45" : "#94a3b8",
+              }}>
+                {total.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
+              </span>
+            </div>
+
+            <button
+              className="btn-finalizar"
+              style={{
+                ...styles.finalizar,
+                background: carrinho.length === 0 ? "#94a3b8" : "#0d7a45",
+              }}
+              onClick={finalizarVenda}
+              disabled={finalizando || carrinho.length === 0}
+            >
+              {finalizando ? <><Icon.spinner />Finalizando...</> : "Finalizar Venda"}
+            </button>
+          </div>
         </div>
       </div>
 
+      {/* Toast */}
       {toast && (
         <div style={{
-          position: "fixed",
-          bottom: 20,
-          right: 20,
-          background: toast.tipo === "erro"
-            ? "#dc2626"
-            : "#0d7a45",
-          color: "#fff",
-          padding: "14px 18px",
-          borderRadius: 10,
-          fontWeight: "bold",
-          zIndex: 999
+          position: "fixed", bottom: 20, right: 20,
+          background: toast.tipo === "erro" ? "#dc2626" : "#0d7a45",
+          color: "#fff", padding: "14px 20px", borderRadius: 10,
+          fontWeight: "bold", zIndex: 999,
+          animation: "fadeIn .2s ease",
+          boxShadow: "0 4px 12px rgba(0,0,0,.2)",
         }}>
           {toast.msg}
         </div>
       )}
-
-    </div>
-  </>
-);
+    </>
+  );
 }
 
+// ─── Estilos ──────────────────────────────────────────────────────────────────
 const styles = {
   container: {
     display: "grid",
-    gridTemplateColumns: "1fr 380px",
+    gridTemplateColumns: "1fr 400px",
     gap: 20,
-    padding: 20
+    padding: 20,
+    minHeight: "100vh",
+    background: "#f1f5f9",
   },
-
   left: {
     background: "#fff",
     borderRadius: 12,
-    padding: 20
+    padding: 20,
+    display: "flex",
+    flexDirection: "column",
   },
-
   right: {
     background: "#fff",
     borderRadius: 12,
     padding: 20,
     height: "calc(100vh - 40px)",
-    display: "flex",
-    flexDirection: "column"
-  },
-
-  header: {
-    marginBottom: 20
-  },
-
-  input: {
-    width: "100%",
-    padding: 12,
-    borderRadius: 8,
-    border: "1px solid #ccc",
-    marginTop: 10
-  },
-
-  listaProdutos: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))",
-    gap: 14
-  },
-
-  card: {
-    border: "1px solid #e2e8f0",
-    borderRadius: 10,
-    padding: 16,
+    position: "sticky",
+    top: 20,
     display: "flex",
     flexDirection: "column",
-    justifyContent: "space-between",
-    gap: 12
   },
-
-  preco: {
-    fontSize: 20,
-    fontWeight: "bold",
-    marginTop: 10
+  header: { marginBottom: 16 },
+  label: { display: "block", fontSize: 12, fontWeight: "bold", color: "#475569", marginBottom: 6 },
+  input: {
+    width: "100%", padding: "10px 12px", borderRadius: 8,
+    border: "1px solid #ccc", fontSize: 14, boxSizing: "border-box",
   },
-
-  estoque: {
-    fontSize: 13,
-    color: "#64748b"
+  btnLimparInput: {
+    position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)",
+    background: "none", border: "none", cursor: "pointer",
+    fontSize: 18, color: "#94a3b8", lineHeight: 1,
   },
-
-  botao: {
-    background: "#0d7a45",
-    color: "#fff",
-    border: "none",
-    padding: 10,
-    borderRadius: 8,
-    cursor: "pointer",
-    fontWeight: "bold"
-  },
-
-  carrinho: {
-    flex: 1,
+  listaProdutos: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))",
+    gap: 14,
     overflowY: "auto",
-    marginTop: 20
+    flex: 1,
+    paddingRight: 4,
   },
-
+  card: {
+    border: "1px solid #e2e8f0", borderRadius: 10, padding: 14,
+    display: "flex", flexDirection: "column", justifyContent: "space-between", gap: 12,
+  },
+  preco: { fontSize: 19, fontWeight: "bold", marginTop: 8, color: "#0f172a" },
+  estoque: { fontSize: 13, marginTop: 2 },
+  botao: {
+    color: "#fff", border: "none", padding: "10px 0",
+    borderRadius: 8, cursor: "pointer", fontWeight: "bold", fontSize: 14,
+  },
+  carrinho: { flex: 1, overflowY: "auto", marginTop: 16, paddingRight: 2 },
   item: {
-    borderBottom: "1px solid #eee",
-    padding: "12px 0",
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center"
+    borderBottom: "1px solid #f1f5f9", padding: "10px 0",
+    display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8,
   },
-
-  subtotal: {
-    marginTop: 5,
-    fontWeight: "bold"
-  },
-
-  controles: {
-    display: "flex",
-    alignItems: "center",
-    gap: 8
-  },
-
+  subtotal: { marginTop: 2, fontWeight: "bold", color: "#0f172a", fontSize: 14 },
+  controles: { display: "flex", alignItems: "center", gap: 6, flexShrink: 0 },
   btnQtd: {
-    width: 28,
-    height: 28,
-    borderRadius: 6,
-    border: "none",
-    cursor: "pointer"
+    width: 28, height: 28, borderRadius: 6,
+    border: "1px solid #e2e8f0", cursor: "pointer", fontWeight: "bold",
+    background: "#f8fafc", fontSize: 16, display: "flex", alignItems: "center", justifyContent: "center",
   },
-
+  inputQtd: {
+    width: 42, height: 28, textAlign: "center",
+    border: "1px solid #e2e8f0", borderRadius: 6, fontSize: 14,
+    MozAppearance: "textfield",
+  },
   btnExcluir: {
-    background: "#dc2626",
-    color: "#fff",
-    border: "none",
-    width: 28,
-    height: 28,
-    borderRadius: 6,
-    cursor: "pointer"
+    background: "#fee2e2", color: "#dc2626", border: "none",
+    width: 28, height: 28, borderRadius: 6, cursor: "pointer", fontWeight: "bold",
   },
-
-  footer: {
-    borderTop: "1px solid #eee",
-    paddingTop: 20
-  },
-
+  footer: { borderTop: "1px solid #f1f5f9", paddingTop: 16 },
   select: {
-    width: "100%",
-    padding: 12,
-    borderRadius: 8,
-    marginBottom: 20
+    width: "100%", padding: "10px 12px", borderRadius: 8,
+    border: "1px solid #ccc", marginBottom: 16, background: "#fff",
+    fontSize: 14, boxSizing: "border-box",
   },
-
+  totalBox: {
+    display: "flex", justifyContent: "space-between", alignItems: "center",
+    border: "1px solid", borderRadius: 10, padding: "10px 16px", marginBottom: 14,
+    transition: "all .3s",
+  },
   finalizar: {
-    width: "100%",
-    background: "#0d7a45",
-    color: "#fff",
-    border: "none",
-    padding: 16,
-    borderRadius: 10,
-    fontSize: 18,
-    fontWeight: "bold",
-    cursor: "pointer"
+    width: "100%", color: "#fff", border: "none",
+    padding: 16, borderRadius: 10, fontSize: 17, fontWeight: "bold", cursor: "pointer",
+    display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
   },
-
   vazio: {
-    color: "#64748b",
-    textAlign: "center",
-    marginTop: 40
-  }
+    color: "#94a3b8", textAlign: "center", marginTop: 40, lineHeight: 1.6,
+  },
+  badge: {
+    display: "inline-flex", alignItems: "center", justifyContent: "center",
+    background: "#0d7a45", color: "#fff", borderRadius: "999px",
+    fontSize: 12, fontWeight: "bold", width: 22, height: 22, marginLeft: 8,
+  },
+  btnLimparCarrinho: {
+    background: "none", border: "1px solid #fca5a5", color: "#dc2626",
+    borderRadius: 6, padding: "4px 10px", cursor: "pointer", fontSize: 13,
+    display: "flex", alignItems: "center", gap: 4,
+  },
+  btnConfirm: {
+    background: "#dc2626", color: "#fff", border: "none",
+    borderRadius: 6, padding: "4px 10px", cursor: "pointer", fontWeight: "bold",
+  },
+  btnCancelar: {
+    background: "#f1f5f9", color: "#475569", border: "none",
+    borderRadius: 6, padding: "4px 10px", cursor: "pointer",
+  },
+  clienteBadge: {
+    display: "flex", alignItems: "center", justifyContent: "space-between",
+    background: "#ecfdf5", border: "1px solid #6ee7b7", borderRadius: 8,
+    padding: "8px 12px", fontSize: 14, fontWeight: "600", color: "#065f46",
+  },
+  btnRemoverCliente: {
+    background: "none", border: "none", cursor: "pointer",
+    fontSize: 18, color: "#94a3b8", lineHeight: 1,
+  },
+  listaClientes: {
+    position: "absolute", top: "100%", left: 0, right: 0,
+    background: "#fff", border: "1px solid #e2e8f0", borderRadius: 8,
+    boxShadow: "0 4px 12px rgba(0,0,0,.1)", zIndex: 50,
+    maxHeight: 200, overflowY: "auto",
+  },
+  clienteItem: {
+    padding: "10px 14px", cursor: "pointer", fontSize: 14, transition: "background .1s",
+  },
 };
