@@ -5,6 +5,7 @@ import Clientes from './components/Clientes'
 import PDV from './components/PDV'
 import Financeiro from './components/Financeiro'
 import Relatorios from './components/Relatorios'
+import HistoricoVendas from './components/HistoricoVendas'
 
 export default function App() {
 
@@ -12,6 +13,7 @@ export default function App() {
 
   function renderTela() {
     switch (tela) {
+
       case 'produtos':
         return <Produtos />
 
@@ -20,6 +22,9 @@ export default function App() {
 
       case 'pdv':
         return <PDV />
+
+      case 'historico':
+        return <HistoricoVendas />
 
       case 'financeiro':
         return <Financeiro />
@@ -49,6 +54,15 @@ export default function App() {
           onClick={() => setTela('pdv')}
         >
           🛒 PDV
+        </button>
+
+        <button
+          style={tela === 'historico'
+            ? styles.menuAtivo
+            : styles.menuBtn}
+          onClick={() => setTela('historico')}
+        >
+          🧾 Histórico de Vendas
         </button>
 
         <button
