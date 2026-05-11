@@ -1,11 +1,6 @@
 import { useEffect, useState } from "react";
-import { supabase } from "../supabase";
-
-const fmt = (v) =>
-  Number(v || 0).toLocaleString("pt-BR", {
-    style: "currency",
-    currency: "BRL",
-  });
+import { listarVendas, listarItensDaVenda } from "../services/vendas.service";
+import { fmt, fmtDataHora, matchStr } from "../lib/format";
 
 export default function HistoricoVendas() {
   const [vendas, setVendas] = useState([]);
@@ -20,43 +15,27 @@ export default function HistoricoVendas() {
 
   async function buscarVendas() {
     setLoading(true);
-
-    const { data, error } = await supabase
-      .from("vendas")
-      .select("*")
-      
-
-    if (!error) {
-      setVendas(data || []);
-    } else {
-      console.error(error);
+    try {
+      setVendas(await listarVendas());
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
     }
-
-    setLoading(false);
   }
 
   async function abrirVenda(venda) {
     setVendaSelecionada(venda);
-
-    const { data, error } = await supabase
-      .from("itens_venda")
-      .select(`
-        *,
-        produtos(nome)
-      `)
-      .eq("venda_id", venda.id);
-
-    if (!error) {
-      setItensVenda(data || []);
-    } else {
-      console.error(error);
+    try {
+      setItensVenda(await listarItensDaVenda(venda.id));
+    } catch (e) {
+      console.error(e);
     }
   }
 
-  const vendasFiltradas = vendas.filter((v) => {
-    const cliente = v.clientes?.nome?.toLowerCase() || "";
-    return cliente.includes(busca.toLowerCase());
-  });
+  const vendasFiltradas = vendas.filter((v) =>
+    matchStr(v.cliente_nome, busca)
+  );
 
   return (
     <div style={styles.container}>
@@ -111,7 +90,7 @@ export default function HistoricoVendas() {
               </div>
 
               <div style={styles.nome}>
-                👤 {venda.clientes?.nome || "Não identificado"}
+                👤 {venda.cliente_nome || "Não identificado"}
               </div>
 
               <div style={styles.total}>
@@ -119,7 +98,7 @@ export default function HistoricoVendas() {
               </div>
 
               <div style={styles.data}>
-                {venda.data || "Sem data".toLocaleString("pt-BR")}
+                {fmtDataHora(venda.created_at)}
               </div>
             </div>
           ))}
@@ -143,7 +122,7 @@ export default function HistoricoVendas() {
                 </h2>
 
                 <div style={styles.detailCliente}>
-                  👤 {vendaSelecionada.clientes?.nome || "Não identificado"}
+                  👤 {vendaSelecionada.cliente_nome || "Não identificado"}
                 </div>
               </div>
 

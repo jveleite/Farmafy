@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { fmt, parseBRL } from "../lib/format";
 
 // ─── Configuração ─────────────────────────────────────────────────────────────
-const CHAVE_PIX = "sua-chave-pix@banco.com"; // ← substitua pela chave real
+const CHAVE_PIX = import.meta.env.VITE_PIX_KEY || "sua-chave-pix@banco.com";
 
 const FORMAS = [
   { value: "PIX",      label: "PIX",      emoji: "⚡" },
@@ -10,12 +11,6 @@ const FORMAS = [
   { value: "Debito",   label: "Débito",   emoji: "🏧" },
   { value: "Fiado",    label: "Fiado",    emoji: "🤝" },
 ];
-
-const fmt = (v) =>
-  Number(v || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
-
-const parseBRL = (str) =>
-  parseFloat(String(str).replace(/\./g, "").replace(",", ".")) || 0;
 
 function calcAtalhos(valor) {
   const notas = [5, 10, 20, 50, 100, 200];

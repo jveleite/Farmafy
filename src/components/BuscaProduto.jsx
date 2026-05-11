@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { buscarMedicamentoPorEAN } from "../services/anvisa.service";
 
 export default function BuscaProduto({ busca, setBusca, onProdutoEncontrado }) {
   const [codigo, setCodigo] = useState("");
@@ -13,34 +14,27 @@ export default function BuscaProduto({ busca, setBusca, onProdutoEncontrado }) {
     setErro("");
 
     try {
-      const url = `https://consultas.anvisa.gov.br/api/consulta/medicamentos/produtos/?count=1&filter%5BcodoBarras%5D=${cod}`;
-      const res = await fetch(url);
-      const json = await res.json();
+      const resultado = await buscarMedicamentoPorEAN(cod);
 
-      const produto = json?.content?.[0];
-
-      if (produto) {
-        // Encontrou na ANVISA — repassa os dados pro componente pai
+      if (resultado.encontrado) {
         onProdutoEncontrado({
-          nome: produto.nomeProduto || "",
-          principio_ativo: produto.principioAtivo || "",
-          categoria: "Outros",
-          codigo_barras: cod,
-          _encontrado: true
+          nome: resultado.nome,
+          principio_ativo: resultado.principio_ativo,
+          categoria: resultado.categoria,
+          codigo_barras: resultado.codigo_barras,
+          _encontrado: true,
         });
-        setCodigo("");
       } else {
-        // Não encontrou — abre formulário manual com o código já preenchido
         onProdutoEncontrado({
           nome: "",
           principio_ativo: "",
           categoria: "Outros",
           codigo_barras: cod,
-          _encontrado: false
+          _encontrado: false,
         });
-        setCodigo("");
         setErro("Medicamento não encontrado na ANVISA. Preencha manualmente.");
       }
+      setCodigo("");
     } catch (e) {
       setErro("Erro ao consultar ANVISA. Verifique sua conexão.");
     }

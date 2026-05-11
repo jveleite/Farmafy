@@ -1,5 +1,9 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { supabase } from "../supabase";
+import { listarProdutosDisponiveis } from "../services/produtos.service";
+import { listarClientes } from "../services/clientes.service";
+import { finalizarVenda as finalizarVendaSvc } from "../services/vendas.service";
+import { fmt, matchStr } from "../lib/format";
+import { useToast } from "../ui/Toast";
 import ModalPagamento from "./ModalPagamento";
 
 // ─── Ícones inline ────────────────────────────────────────────────────────────
@@ -26,6 +30,7 @@ const PAGAMENTOS = [
 ];
 
 export default function PDV() {
+  const mostrarToast = useToast();
   const [produtos, setProdutos]                     = useState([]);
   const [clientes, setClientes]                     = useState([]);
   const [clienteSelecionado, setClienteSelecionado] = useState(null); // { id, nome }
@@ -33,13 +38,11 @@ export default function PDV() {
   const [busca, setBusca]                           = useState("");
   const [carrinho, setCarrinho]                     = useState([]);
   const [pagamento, setPagamento]                   = useState("PIX"); // forma pré-selecionada no PDV
-  const [toast, setToast]                           = useState(null);
   const [finalizando, setFinalizando]               = useState(false);
   const [flashIds, setFlashIds]                     = useState(new Set());
   const [confirmLimpar, setConfirmLimpar]           = useState(false);
   const [modalPagamento, setModalPagamento]         = useState(false);
   const dropdownRef = useRef(null);
-  const toastTimer  = useRef(null);
 
   // ── Fechar dropdown ao clicar fora ───────────────────────────────────────────
   useEffect(() => {
@@ -51,22 +54,15 @@ export default function PDV() {
     return () => document.removeEventListener("mousedown", handle);
   }, []);
 
-  useEffect(() => { buscarProdutos(); buscarClientes(); }, []);
+  useEffect(() => { recarregarProdutos(); recarregarClientes(); }, []);
 
-  async function buscarProdutos() {
-    const { data, error } = await supabase.from("produtos").select("*").gt("estoque", 0).order("nome");
-    if (!error) setProdutos(data || []);
+  async function recarregarProdutos() {
+    try { setProdutos(await listarProdutosDisponiveis()); }
+    catch (e) { mostrarToast("Erro ao carregar produtos.", "erro"); console.error(e); }
   }
-  async function buscarClientes() {
-    const { data, error } = await supabase.from("clientes").select("*").order("nome");
-    if (!error) setClientes(data || []);
-  }
-
-  // ── Toast ─────────────────────────────────────────────────────────────────────
-  function mostrarToast(msg, tipo = "ok") {
-    clearTimeout(toastTimer.current);
-    setToast({ msg, tipo });
-    toastTimer.current = setTimeout(() => setToast(null), 3000);
+  async function recarregarClientes() {
+    try { setClientes(await listarClientes()); }
+    catch (e) { mostrarToast("Erro ao carregar clientes.", "erro"); console.error(e); }
   }
 
   // ── Flash card ────────────────────────────────────────────────────────────────
@@ -105,50 +101,40 @@ export default function PDV() {
   const total = useMemo(() => carrinho.reduce((acc, i) => acc + i.preco * i.quantidade, 0), [carrinho]);
 
   const produtosFiltrados = useMemo(
-    () => produtos.filter(p => p.nome.toLowerCase().includes(busca.toLowerCase())),
+    () => produtos.filter(p => matchStr(p.nome, busca)),
     [produtos, busca]
   );
-  const clientesFiltrados = useMemo(() => {
-    const q = buscaCliente.toLowerCase();
-    return clientes.filter(c => c.nome?.toLowerCase().includes(q) || c.telefone?.includes(q));
-  }, [clientes, buscaCliente]);
+  const clientesFiltrados = useMemo(
+    () => clientes.filter(c => matchStr(c.nome, buscaCliente) || (c.telefone ?? "").includes(buscaCliente)),
+    [clientes, buscaCliente]
+  );
 
   // ── Finalizar venda ───────────────────────────────────────────────────────────
   async function finalizarVenda(dadosPagamento) {
     if (carrinho.length === 0) { mostrarToast("Carrinho vazio.", "erro"); return; }
     setFinalizando(true);
     try {
-      const { data: venda, error: erroVenda } = await supabase
-        .from("vendas")
-        .insert({
-  cliente_id: dadosPagamento.cliente_id,
-  cliente_nome: clienteSelecionado?.nome || "Não identificado",
-  total,
-  pagamento: dadosPagamento.formas.map(f => f.forma).join(" + "),
-  recebido: dadosPagamento.recebido,
-  troco: dadosPagamento.troco,
-})
-        .select().single();
-      if (erroVenda) throw erroVenda;
-
-      const { error: erroItens } = await supabase.from("itens_venda").insert(
-        carrinho.map(item => ({
-          venda_id: venda.id, produto_id: item.id,
-          quantidade: item.quantidade, preco_unitario: item.preco,
-        }))
-      );
-      if (erroItens) throw erroItens;
-
-      await Promise.all(
-        carrinho.map(item =>
-          supabase.from("produtos").update({ estoque: item.estoque - item.quantidade }).eq("id", item.id)
-        )
-      );
+      await finalizarVendaSvc({
+        venda: {
+          cliente_id: dadosPagamento.cliente_id,
+          cliente_nome: clienteSelecionado?.nome || "Não identificado",
+          total,
+          pagamento: dadosPagamento.formas.map(f => f.forma).join(" + "),
+          recebido: dadosPagamento.recebido,
+          troco: dadosPagamento.troco,
+        },
+        itens: carrinho.map(item => ({
+          produto_id: item.id,
+          quantidade: item.quantidade,
+          preco_unitario: item.preco,
+          estoque_anterior: item.estoque,
+        })),
+      });
 
       mostrarToast("✅ Venda finalizada com sucesso!");
       setCarrinho([]);
       setClienteSelecionado(null);
-      buscarProdutos();
+      recarregarProdutos();
     } catch (err) {
       console.error(err);
       mostrarToast("Erro ao finalizar venda.", "erro");
@@ -236,7 +222,7 @@ export default function PDV() {
                   <div>
                     <strong style={{ fontSize: 15 }}>{produto.nome}</strong>
                     <div style={styles.preco}>
-                      {Number(produto.preco).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
+                      {fmt(produto.preco)}
                     </div>
                     <div style={{ ...styles.estoque, color: estoqueBaixo ? "#b45309" : "#64748b", fontWeight: estoqueBaixo ? "bold" : "normal" }}>
                       {estoqueBaixo ? "⚠️ " : ""}Estoque: {produto.estoque}
@@ -302,10 +288,10 @@ export default function PDV() {
                       {item.nome}
                     </strong>
                     <div style={{ fontSize: 13, color: "#64748b" }}>
-                      {Number(item.preco).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })} /un
+                      {fmt(item.preco)} /un
                     </div>
                     <div style={styles.subtotal}>
-                      {(item.preco * item.quantidade).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
+                      {fmt(item.preco * item.quantidade)}
                     </div>
                   </div>
                   <div style={styles.controles}>
@@ -396,7 +382,7 @@ export default function PDV() {
             }}>
               <span style={{ fontSize: 13, color: "#64748b" }}>Total</span>
               <span style={{ fontSize: 28, fontWeight: "bold", color: carrinho.length > 0 ? "#0d7a45" : "#94a3b8" }}>
-                {total.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
+                {fmt(total)}
               </span>
             </div>
 
@@ -412,18 +398,6 @@ export default function PDV() {
         </div>
       </div>
 
-      {/* Toast */}
-      {toast && (
-        <div style={{
-          position: "fixed", bottom: 20, right: 20,
-          background: toast.tipo === "erro" ? "#dc2626" : "#0d7a45",
-          color: "#fff", padding: "14px 20px", borderRadius: 10,
-          fontWeight: "bold", zIndex: 999,
-          animation: "fadeIn .2s ease", boxShadow: "0 4px 12px rgba(0,0,0,.2)",
-        }}>
-          {toast.msg}
-        </div>
-      )}
     </>
   );
 }
