@@ -42,14 +42,20 @@ export async function finalizarVenda({ venda, itens }) {
     .single();
   if (erroVenda) throw erroVenda;
 
-  // 2. cria os itens
-  const itensComId = itens.map((it) => ({ ...it, venda_id: vendaCriada.id }));
+  // 2. cria os itens (apenas as colunas que existem na tabela)
+  const itensParaInserir = itens.map((it) => ({
+    venda_id: vendaCriada.id,
+    produto_id: it.produto_id,
+    quantidade: it.quantidade,
+    preco_unitario: it.preco_unitario,
+  }));
   const { error: erroItens } = await supabase
     .from("itens_venda")
-    .insert(itensComId);
+    .insert(itensParaInserir);
   if (erroItens) throw erroItens;
 
-  // 3. debita estoque (paralelo — TODO: virar RPC com transação)
+  // 3. debita estoque (paralelo — TODO: virar RPC com transação).
+  // estoque_anterior vem do PDV, não da tabela — não é persistido.
   await Promise.all(
     itens.map((it) =>
       supabase
