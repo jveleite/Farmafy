@@ -1,18 +1,44 @@
-import { createContext, useContext, useEffect, useState } from "react";
+import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { aoMudarAuth, carregarProfile, getSessao } from "../services/auth.service";
 
 const AuthCtx = createContext(null);
 
 /**
- * useAuth() devolve { sessao, profile, loading, recarregarProfile }
+ * useAuth() devolve { sessao, profile, permissoes, loading, recarregarProfile }
  * - sessao: objeto de sessão do Supabase (ou null)
  * - profile: { id, nome, role, farmaciaId, farmaciaNome, email } ou null
+ * - permissoes: derivado de role — { role, isOwner, isFarmaceutico, isAtendente,
+ *               veFinanceiro, veEquipe, podeAlterarProdutos, podeExcluirClientes }
  * - loading: true durante o boot inicial
  */
 export function useAuth() {
   const ctx = useContext(AuthCtx);
   if (!ctx) throw new Error("useAuth precisa estar dentro de <AuthProvider>");
   return ctx;
+}
+
+/**
+ * Deriva o objeto de permissões a partir da role.
+ * Centraliza a tabela de quem pode o quê.
+ */
+function permissoesDeRole(role) {
+  const isOwner        = role === "owner";
+  const isFarmaceutico = role === "farmaceutico";
+  const isAtendente    = role === "atendente";
+
+  return {
+    role,
+    isOwner,
+    isFarmaceutico,
+    isAtendente,
+    // Telas
+    veFinanceiro: isOwner,
+    veEquipe:     isOwner,
+    // Produtos
+    podeAlterarProdutos: isOwner || isFarmaceutico,
+    // Clientes
+    podeExcluirClientes: isOwner || isFarmaceutico,
+  };
 }
 
 export function AuthProvider({ children }) {
@@ -61,8 +87,13 @@ export function AuthProvider({ children }) {
     }
   }
 
+  const permissoes = useMemo(
+    () => permissoesDeRole(profile?.role),
+    [profile?.role]
+  );
+
   return (
-    <AuthCtx.Provider value={{ sessao, profile, loading, recarregarProfile }}>
+    <AuthCtx.Provider value={{ sessao, profile, permissoes, loading, recarregarProfile }}>
       {children}
     </AuthCtx.Provider>
   );

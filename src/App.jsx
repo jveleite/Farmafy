@@ -15,7 +15,7 @@ import { useToast } from './ui/Toast'
 import Logo from './ui/Logo'
 
 export default function App() {
-  const { sessao, profile, loading } = useAuth()
+  const { sessao, profile, permissoes, loading } = useAuth()
   const toast = useToast()
   const [tela, setTela] = useState('pdv')
 
@@ -60,6 +60,11 @@ export default function App() {
   }
 
   function renderTela() {
+    // Defesa em camada UI: se um atendente conseguir setar `tela`
+    // pra algo restrito (via DevTools), mostra "sem permissão".
+    if (tela === 'financeiro' && !permissoes.veFinanceiro) return <SemPermissao />
+    if (tela === 'equipe'     && !permissoes.veEquipe)     return <SemPermissao />
+
     switch (tela) {
       case 'produtos':   return <Produtos />
       case 'clientes':   return <Clientes />
@@ -71,8 +76,6 @@ export default function App() {
       default:           return <PDV />
     }
   }
-
-  const isOwner = profile.role === 'owner'
 
   return (
     <div style={styles.layout}>
@@ -90,9 +93,11 @@ export default function App() {
             <ItemMenu icon="🧾" label="Histórico de Vendas" ativo={tela==='historico'}  onClick={() => setTela('historico')} />
             <ItemMenu icon="📦" label="Produtos"           ativo={tela==='produtos'}   onClick={() => setTela('produtos')} />
             <ItemMenu icon="👥" label="Clientes"           ativo={tela==='clientes'}   onClick={() => setTela('clientes')} />
-            <ItemMenu icon="💰" label="Financeiro"         ativo={tela==='financeiro'} onClick={() => setTela('financeiro')} />
+            {permissoes.veFinanceiro && (
+              <ItemMenu icon="💰" label="Financeiro"       ativo={tela==='financeiro'} onClick={() => setTela('financeiro')} />
+            )}
             <ItemMenu icon="📊" label="Relatórios"         ativo={tela==='relatorios'} onClick={() => setTela('relatorios')} />
-            {isOwner && (
+            {permissoes.veEquipe && (
               <ItemMenu icon="👥" label="Equipe"           ativo={tela==='equipe'}     onClick={() => setTela('equipe')} />
             )}
           </nav>
@@ -122,6 +127,26 @@ function ItemMenu({ icon, label, ativo, onClick }) {
       style={ativo ? styles.menuAtivo : styles.menuBtn}>
       <span style={{ marginRight: 8 }}>{icon}</span>{label}
     </button>
+  )
+}
+
+function SemPermissao() {
+  return (
+    <div style={{
+      minHeight: 'calc(100vh - 40px)',
+      display: 'flex',
+      flexDirection: 'column',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 8,
+      color: '#64748b',
+    }}>
+      <div style={{ fontSize: 48 }}>🔒</div>
+      <div style={{ fontSize: 18, fontWeight: 700, color: '#0f172a' }}>Sem permissão</div>
+      <div style={{ fontSize: 13, textAlign: 'center', maxWidth: 360 }}>
+        Esta tela é restrita ao dono da farmácia. Peça acesso a quem cadastrou você.
+      </div>
+    </div>
   )
 }
 

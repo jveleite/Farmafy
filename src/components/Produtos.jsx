@@ -10,6 +10,7 @@ import {
 import { fmt, matchStr, diasParaVencer } from "../lib/format";
 import { colors, radius, shadow } from "../styles/tokens";
 import { useToast } from "../ui/Toast";
+import { useAuth } from "../ui/Auth";
 import Button from "../ui/Button";
 import Input from "../ui/Input";
 import Field from "../ui/Field";
@@ -30,6 +31,8 @@ const FORM_VAZIO = {
 
 export default function Produtos() {
   const toast = useToast();
+  const { permissoes } = useAuth();
+  const podeAlterar = permissoes.podeAlterarProdutos;
   const [produtos, setProdutos] = useState([]);
   const [busca, setBusca] = useState("");
   const [loading, setLoading] = useState(true);
@@ -169,26 +172,28 @@ export default function Produtos() {
       <div style={styles.secHeader}>
         <span style={styles.secTitulo}>📦 Produtos ({lista.length})</span>
         <div style={{ display: "flex", gap: 8, flex: 1, justifyContent: "flex-end", flexWrap: "wrap" }}>
-          <BuscaProduto
-            busca={busca}
-            setBusca={setBusca}
-            onProdutoEncontrado={(dados) => {
-              setEditando(null);
-              setForm({
-                nome: dados.nome,
-                principio_ativo: dados.principio_ativo,
-                categoria: dados.categoria || "Outros",
-                codigo_barras: dados.codigo_barras,
-                estoque: "",
-                estoque_minimo: 10,
-                preco_compra: "",
-                preco: "",
-                validade: ""
-              });
-              setModal(true);
-            }}
-          />
-          <Button onClick={abrirNovo}>+ Novo produto</Button>
+          {podeAlterar && (
+            <BuscaProduto
+              busca={busca}
+              setBusca={setBusca}
+              onProdutoEncontrado={(dados) => {
+                setEditando(null);
+                setForm({
+                  nome: dados.nome,
+                  principio_ativo: dados.principio_ativo,
+                  categoria: dados.categoria || "Outros",
+                  codigo_barras: dados.codigo_barras,
+                  estoque: "",
+                  estoque_minimo: 10,
+                  preco_compra: "",
+                  preco: "",
+                  validade: ""
+                });
+                setModal(true);
+              }}
+            />
+          )}
+          {podeAlterar && <Button onClick={abrirNovo}>+ Novo produto</Button>}
         </div>
       </div>
 
@@ -227,8 +232,12 @@ export default function Produtos() {
                       <div style={{ display: "flex", gap: 4 }}>
                         <Button variant="warning" size="sm" title="Entrada de estoque"
                           onClick={() => { setModalEntrada(p); setQtdEntrada(""); }}>📥</Button>
-                        <Button variant="ghost" size="sm" onClick={() => abrirEditar(p)}>✏️</Button>
-                        <Button variant="danger" size="sm" onClick={() => excluir(p.id, p.nome)}>🗑️</Button>
+                        {podeAlterar && (
+                          <Button variant="ghost" size="sm" onClick={() => abrirEditar(p)}>✏️</Button>
+                        )}
+                        {podeAlterar && (
+                          <Button variant="danger" size="sm" onClick={() => excluir(p.id, p.nome)}>🗑️</Button>
+                        )}
                       </div>
                     </td>
                   </tr>

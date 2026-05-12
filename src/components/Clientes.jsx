@@ -9,6 +9,7 @@ import { listarVendasComItens } from "../services/vendas.service";
 import { fmt, fmtData, matchStr } from "../lib/format";
 import { colors, radius, shadow } from "../styles/tokens";
 import { useToast } from "../ui/Toast";
+import { useAuth } from "../ui/Auth";
 import Button from "../ui/Button";
 import Input from "../ui/Input";
 import Field from "../ui/Field";
@@ -19,6 +20,8 @@ const FORM_VAZIO = { nome: "", telefone: "", cidade: "", observacoes: "" };
 
 export default function Clientes() {
   const toast = useToast();
+  const { permissoes } = useAuth();
+  const podeExcluir = permissoes.podeExcluirClientes;
   const [clientes, setClientes] = useState([]);
   const [vendas, setVendas] = useState([]);
   const [busca, setBusca] = useState("");
@@ -182,7 +185,9 @@ export default function Clientes() {
                             📋 Histórico
                           </Button>
                           <Button variant="ghost" size="sm" onClick={() => abrirEditar(c)}>✏️</Button>
-                          <Button variant="danger" size="sm" onClick={() => excluir(c.id, c.nome)}>🗑️</Button>
+                          {podeExcluir && (
+                            <Button variant="danger" size="sm" onClick={() => excluir(c.id, c.nome)}>🗑️</Button>
+                          )}
                         </div>
                       </td>
                     </tr>
