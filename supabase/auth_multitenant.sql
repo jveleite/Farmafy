@@ -1,7 +1,7 @@
 -- ════════════════════════════════════════════════════════════════════════════
 -- Migração: AUTH + MULTI-TENANT pro FarmaFy
 -- ════════════════════════════════════════════════════════════════════════════
---
+--+
 -- O QUE FAZ:
 --   1. Cria tabelas `farmacias` e `profiles` (perfil do usuário linkado a 1 farmácia)
 --   2. Adiciona coluna `farmacia_id` em TODAS as tabelas de dados

@@ -6,11 +6,13 @@ import PDV from './components/pdv/PDV'
 import Financeiro from './components/financeiro/Financeiro'
 import Relatorios from './components/relatorios/Relatorios'
 import HistoricoVendas from './components/HistoricoVendas'
+import Equipe from './components/equipe/Equipe'
 import TelaAuth from './components/auth/TelaAuth'
 
 import { useAuth } from './ui/Auth'
 import { logout } from './services/auth.service'
 import { useToast } from './ui/Toast'
+import Logo from './ui/Logo'
 
 export default function App() {
   const { sessao, profile, loading } = useAuth()
@@ -65,16 +67,22 @@ export default function App() {
       case 'historico':  return <HistoricoVendas />
       case 'financeiro': return <Financeiro />
       case 'relatorios': return <Relatorios />
+      case 'equipe':     return <Equipe />
       default:           return <PDV />
     }
   }
+
+  const isOwner = profile.role === 'owner'
 
   return (
     <div style={styles.layout}>
       {/* SIDEBAR */}
       <aside style={styles.sidebar}>
         <div>
-          <div style={styles.logo}>💊 Farmafy</div>
+          <div style={styles.logoWrap}>
+            <Logo size={40} />
+            <div style={styles.logoTexto}>FarmaFy</div>
+          </div>
           <div style={styles.farmaciaNome}>{profile.farmaciaNome}</div>
 
           <nav style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 24 }}>
@@ -84,6 +92,9 @@ export default function App() {
             <ItemMenu icon="👥" label="Clientes"           ativo={tela==='clientes'}   onClick={() => setTela('clientes')} />
             <ItemMenu icon="💰" label="Financeiro"         ativo={tela==='financeiro'} onClick={() => setTela('financeiro')} />
             <ItemMenu icon="📊" label="Relatórios"         ativo={tela==='relatorios'} onClick={() => setTela('relatorios')} />
+            {isOwner && (
+              <ItemMenu icon="👥" label="Equipe"           ativo={tela==='equipe'}     onClick={() => setTela('equipe')} />
+            )}
           </nav>
         </div>
 
@@ -154,15 +165,24 @@ const styles = {
     minHeight: '100vh',
   },
 
-  logo: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    marginBottom: 2,
+  logoWrap: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 4,
+  },
+  logoTexto: {
+    fontSize: 20,
+    fontWeight: 600,
+    color: '#fff',
+    fontFamily: '"Outfit", system-ui, sans-serif',
+    letterSpacing: '-0.02em',
   },
   farmaciaNome: {
     fontSize: 12,
     color: '#94a3b8',
     fontWeight: 500,
+    paddingLeft: 2,
   },
 
   menuBtn: {

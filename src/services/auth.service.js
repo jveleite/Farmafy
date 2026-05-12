@@ -51,14 +51,22 @@ export async function signup({ email, senha, nomeUser, nomeFarmacia }) {
     return { precisaConfirmarEmail: true };
   }
 
-  // 2. Cria farmácia + profile via RPC SECURITY DEFINER
-  const { data: farmaciaId, error: e2 } = await supabase.rpc(
-    "setup_nova_farmacia",
-    { p_nome_user: nomeUser, p_nome_farmacia: nomeFarmacia }
+  // 2. Setup inicial: detecta convite ou cria farmácia nova.
+  //    nomeFarmacia pode ser null/vazio se o user foi convidado.
+  const { data: setupRows, error: e2 } = await supabase.rpc(
+    "setup_inicial",
+    { p_nome_user: nomeUser, p_nome_farmacia: nomeFarmacia || null }
   );
   if (e2) throw e2;
 
-  return { farmaciaId };
+  // setup_inicial devolve uma linha com { farmacia_id, farmacia_nome, role, veio_de_convite }
+  const setup = Array.isArray(setupRows) ? setupRows[0] : setupRows;
+  return {
+    farmaciaId: setup?.farmacia_id,
+    farmaciaNome: setup?.farmacia_nome,
+    role: setup?.role,
+    veioDeConvite: setup?.veio_de_convite,
+  };
 }
 
 // ── Profile do usuário logado ───────────────────────────────────────────────

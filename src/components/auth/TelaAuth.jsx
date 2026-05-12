@@ -6,6 +6,7 @@ import { colors, radius, shadow } from "../../styles/tokens";
 import Button from "../../ui/Button";
 import Input from "../../ui/Input";
 import Field from "../../ui/Field";
+import LogoCompleto from "../../ui/LogoCompleto";
 
 /**
  * Tela única de Login / Signup. Modo controlado por `aba`.
@@ -40,8 +41,8 @@ export default function TelaAuth() {
 
   async function cadastrar(e) {
     e.preventDefault();
-    if (!email || !senha || !nomeUser || !nomeFarmacia) {
-      return toast("Preencha todos os campos.", "erro");
+    if (!email || !senha || !nomeUser) {
+      return toast("Preencha email, senha e nome.", "erro");
     }
     if (senha.length < 6) {
       return toast("Senha tem que ter pelo menos 6 caracteres.", "erro");
@@ -52,12 +53,18 @@ export default function TelaAuth() {
       if (res.precisaConfirmarEmail) {
         toast("Confirme seu email pra continuar.", "ok");
         setAba("login");
+      } else if (res.veioDeConvite) {
+        toast(`Bem-vindo à ${res.farmaciaNome}!`);
+        await recarregarProfile();
       } else {
-        toast(`Farmácia "${nomeFarmacia}" criada!`);
+        toast(`Farmácia "${res.farmaciaNome}" criada!`);
         await recarregarProfile();
       }
     } catch (err) {
-      toast("Cadastro falhou: " + (err.message || "tente de novo"), "erro");
+      const msg = (err.message || "").includes("nome da farmácia")
+        ? "Você precisa informar o nome da farmácia (ou pedir um convite)."
+        : "Cadastro falhou: " + (err.message || "tente de novo");
+      toast(msg, "erro");
     } finally {
       setCarregando(false);
     }
@@ -68,9 +75,11 @@ export default function TelaAuth() {
   return (
     <div style={styles.tela}>
       <div style={styles.card}>
-        <div style={styles.logo}>💊 FarmaFy</div>
-        <div style={styles.subtitulo}>
-          {isLogin ? "Entre na sua farmácia" : "Crie sua conta"}
+        <div style={styles.cabecalho}>
+          <LogoCompleto size={92} />
+          <div style={styles.subtitulo}>
+            {isLogin ? "Entre na sua farmácia" : "Crie sua conta"}
+          </div>
         </div>
 
         <div style={styles.tabs}>
@@ -87,7 +96,7 @@ export default function TelaAuth() {
               </Field>
               <Field label="Nome da farmácia">
                 <Input value={nomeFarmacia} onChange={(e) => setNomeFarmacia(e.target.value)}
-                  placeholder="Farmácia Central" />
+                  placeholder="Deixe em branco se foi convidado" />
               </Field>
             </>
           )}
@@ -165,18 +174,16 @@ const styles = {
     maxWidth: 380,
     boxShadow: shadow.modal,
   },
-  logo: {
-    fontSize: 28,
-    fontWeight: "bold",
-    textAlign: "center",
-    marginBottom: 4,
-    color: colors.brand,
+  cabecalho: {
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    marginBottom: 26,
   },
   subtitulo: {
     fontSize: 14,
     color: colors.textSubtle,
-    textAlign: "center",
-    marginBottom: 22,
+    marginTop: 14,
   },
   tabs: {
     display: "flex",
