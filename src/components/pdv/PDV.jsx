@@ -59,18 +59,26 @@ export default function PDV() {
   }
 
   function alterarQuantidade(id, tipo) {
+    // Guarda fora do updater pra não chamar setState do toast durante render.
+    if (tipo === "mais") {
+      const item = carrinho.find((i) => i.id === id);
+      if (item && item.quantidade >= item.estoque) {
+        toast("Estoque insuficiente.", "erro");
+        return;
+      }
+    }
     setCarrinho((c) =>
-      c.map((item) => {
-        if (item.id !== id) return item;
-        if (tipo === "mais" && item.quantidade >= item.estoque) {
-          toast("Estoque insuficiente.", "erro");
-          return item;
-        }
-        return {
-          ...item,
-          quantidade: Math.max(1, tipo === "mais" ? item.quantidade + 1 : item.quantidade - 1),
-        };
-      })
+      c.map((item) =>
+        item.id !== id
+          ? item
+          : {
+              ...item,
+              quantidade: Math.max(
+                1,
+                tipo === "mais" ? item.quantidade + 1 : item.quantidade - 1
+              ),
+            }
+      )
     );
   }
 
