@@ -3,8 +3,8 @@ import { useState } from 'react'
 import Produtos from './components/Produtos'
 import Clientes from './components/Clientes'
 import PDV from './components/pdv/PDV'
-import Financeiro from './components/Financeiro'
-import Relatorios from './components/Relatorios'
+import Financeiro from './components/financeiro/Financeiro'
+import Relatorios from './components/relatorios/Relatorios'
 import HistoricoVendas from './components/HistoricoVendas'
 
 export default function App() {
