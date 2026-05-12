@@ -27,43 +27,28 @@ export async function listarItensDaVenda(vendaId) {
 }
 
 /**
- * Finaliza uma venda completa: insere venda, insere itens, debita estoque.
+ * Finaliza uma venda completa — chama a RPC atômica `finalizar_venda` no
+ * Supabase. A RPC insere a venda, insere os itens e debita o estoque numa
+ * única transação Postgres. Se qualquer passo falhar (estoque insuficiente
+ * inclusive), a transação inteira é desfeita.
  *
- * IMPORTANTE: hoje os 3 passos são separados — se o segundo falhar, a venda
- * fica órfã. Próximo passo (Rodada 6) é virar isso uma RPC `finalizar_venda`
- * no Supabase, atômica via transação.
+ * O SQL da RPC mora em /supabase/finalizar_venda.sql. Pra criar/atualizar
+ * no banco: cole no SQL Editor do dashboard do Supabase e clique Run.
  */
 export async function finalizarVenda({ venda, itens }) {
-  // 1. cria a venda
-  const { data: vendaCriada, error: erroVenda } = await supabase
-    .from("vendas")
-    .insert(venda)
-    .select()
-    .single();
-  if (erroVenda) throw erroVenda;
-
-  // 2. cria os itens (apenas as colunas que existem na tabela)
-  const itensParaInserir = itens.map((it) => ({
-    venda_id: vendaCriada.id,
-    produto_id: it.produto_id,
-    quantidade: it.quantidade,
-    preco_unitario: it.preco_unitario,
-  }));
-  const { error: erroItens } = await supabase
-    .from("itens_venda")
-    .insert(itensParaInserir);
-  if (erroItens) throw erroItens;
-
-  // 3. debita estoque (paralelo — TODO: virar RPC com transação).
-  // estoque_anterior vem do PDV, não da tabela — não é persistido.
-  await Promise.all(
-    itens.map((it) =>
-      supabase
-        .from("produtos")
-        .update({ estoque: it.estoque_anterior - it.quantidade })
-        .eq("id", it.produto_id)
-    )
-  );
-
-  return vendaCriada;
+  const { data, error } = await supabase.rpc("finalizar_venda", {
+    p_cliente_id:   venda.cliente_id,
+    p_cliente_nome: venda.cliente_nome,
+    p_total:        venda.total,
+    p_pagamento:    venda.pagamento,
+    p_recebido:     venda.recebido,
+    p_troco:        venda.troco,
+    p_itens: itens.map((it) => ({
+      produto_id:     it.produto_id,
+      quantidade:     it.quantidade,
+      preco_unitario: it.preco_unitario,
+    })),
+  });
+  if (error) throw error;
+  return data; // venda_id criado
 }
