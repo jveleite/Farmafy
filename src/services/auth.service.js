@@ -77,7 +77,7 @@ export async function carregarProfile() {
 
   const { data, error } = await supabase
     .from("profiles")
-    .select("id, nome, role, farmacia_id, farmacias(nome)")
+    .select("id, nome, role, farmacia_id, farmacias(nome, chave_pix)")
     .eq("id", user.id)
     .maybeSingle();
   if (error) throw error;
@@ -90,6 +90,7 @@ export async function carregarProfile() {
     role: data.role,
     farmaciaId: data.farmacia_id,
     farmaciaNome: data.farmacias?.nome || "—",
+    farmaciaChavePix: data.farmacias?.chave_pix || "",
     email: user.email,
   };
 }

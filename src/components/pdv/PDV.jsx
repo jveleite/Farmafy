@@ -15,8 +15,11 @@ import RodapeTotal from "./RodapeTotal";
  * Orquestrador do PDV. Detém o estado compartilhado (carrinho, cliente,
  * forma pré-selecionada) e delega UI pros sub-componentes.
  */
+import { useAuth } from "../../ui/Auth";
+
 export default function PDV() {
   const toast = useToast();
+  const { profile } = useAuth();
 
   const [produtos, setProdutos]                     = useState([]);
   const [clientes, setClientes]                     = useState([]);
@@ -150,6 +153,7 @@ export default function PDV() {
         total={total}
         formaInicial={pagamento}
         cliente={clienteSelecionado}
+        chavePix={profile?.farmaciaChavePix}
         onCancelar={() => setModalAberto(false)}
         onConfirmar={finalizar}
       />

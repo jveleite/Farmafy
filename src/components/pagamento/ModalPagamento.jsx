@@ -4,7 +4,8 @@ import { colors, radius, shadow } from "../../styles/tokens";
 import FormaItem from "./FormaItem";
 import ResumoConfirmacao from "./ResumoConfirmacao";
 
-const CHAVE_PIX = import.meta.env.VITE_PIX_KEY || "sua-chave-pix@banco.com";
+// Fallback usado só se a farmácia não tiver chave cadastrada em Configurações.
+const CHAVE_PIX_FALLBACK = "(configure em Configurações)";
 
 /**
  * Orquestrador do modal de pagamento.
@@ -28,9 +29,11 @@ export default function ModalPagamento({
   total,
   formaInicial = "PIX",
   cliente,
+  chavePix,
   onCancelar,
   onConfirmar,
 }) {
+  const CHAVE_PIX = chavePix || CHAVE_PIX_FALLBACK;
   const [etapa, setEtapa]       = useState("pagamento");
   const [formas, setFormas]     = useState([{ forma: formaInicial, valor: "" }]);
   const [recebido, setRecebido] = useState("");

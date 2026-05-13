@@ -7,6 +7,7 @@ import Financeiro from './components/financeiro/Financeiro'
 import Relatorios from './components/relatorios/Relatorios'
 import HistoricoVendas from './components/HistoricoVendas'
 import Equipe from './components/equipe/Equipe'
+import Configuracoes from './components/configuracoes/Configuracoes'
 import TelaAuth from './components/auth/TelaAuth'
 
 import { useAuth } from './ui/Auth'
@@ -62,18 +63,20 @@ export default function App() {
   function renderTela() {
     // Defesa em camada UI: se um atendente conseguir setar `tela`
     // pra algo restrito (via DevTools), mostra "sem permissão".
-    if (tela === 'financeiro' && !permissoes.veFinanceiro) return <SemPermissao />
-    if (tela === 'equipe'     && !permissoes.veEquipe)     return <SemPermissao />
+    if (tela === 'financeiro'    && !permissoes.veFinanceiro) return <SemPermissao />
+    if (tela === 'equipe'        && !permissoes.veEquipe)     return <SemPermissao />
+    if (tela === 'configuracoes' && !permissoes.veEquipe)     return <SemPermissao />
 
     switch (tela) {
-      case 'produtos':   return <Produtos />
-      case 'clientes':   return <Clientes />
-      case 'pdv':        return <PDV />
-      case 'historico':  return <HistoricoVendas />
-      case 'financeiro': return <Financeiro />
-      case 'relatorios': return <Relatorios />
-      case 'equipe':     return <Equipe />
-      default:           return <PDV />
+      case 'produtos':      return <Produtos />
+      case 'clientes':      return <Clientes />
+      case 'pdv':           return <PDV />
+      case 'historico':     return <HistoricoVendas />
+      case 'financeiro':    return <Financeiro />
+      case 'relatorios':    return <Relatorios />
+      case 'equipe':        return <Equipe />
+      case 'configuracoes': return <Configuracoes />
+      default:              return <PDV />
     }
   }
 
@@ -99,6 +102,9 @@ export default function App() {
             <ItemMenu icon="📊" label="Relatórios"         ativo={tela==='relatorios'} onClick={() => setTela('relatorios')} />
             {permissoes.veEquipe && (
               <ItemMenu icon="👥" label="Equipe"           ativo={tela==='equipe'}     onClick={() => setTela('equipe')} />
+            )}
+            {permissoes.veEquipe && (
+              <ItemMenu icon="⚙️" label="Configurações"   ativo={tela==='configuracoes'} onClick={() => setTela('configuracoes')} />
             )}
           </nav>
         </div>
