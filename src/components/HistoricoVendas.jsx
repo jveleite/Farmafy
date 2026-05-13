@@ -1,17 +1,18 @@
 import { useEffect, useState } from "react";
 import { listarVendas, listarItensDaVenda } from "../services/vendas.service";
 import { fmt, fmtDataHora, matchStr } from "../lib/format";
+import { colors, radius, shadow } from "../styles/tokens";
+import Input from "../ui/Input";
+import Tag from "../ui/Tag";
 
 export default function HistoricoVendas() {
-  const [vendas, setVendas] = useState([]);
-  const [vendaSelecionada, setVendaSelecionada] = useState(null);
-  const [itensVenda, setItensVenda] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [busca, setBusca] = useState("");
+  const [vendas, setVendas]                       = useState([]);
+  const [vendaSelecionada, setVendaSelecionada]   = useState(null);
+  const [itensVenda, setItensVenda]               = useState([]);
+  const [loading, setLoading]                     = useState(true);
+  const [busca, setBusca]                         = useState("");
 
-  useEffect(() => {
-    buscarVendas();
-  }, []);
+  useEffect(() => { buscarVendas(); }, []);
 
   async function buscarVendas() {
     setLoading(true);
@@ -33,81 +34,56 @@ export default function HistoricoVendas() {
     }
   }
 
-  const vendasFiltradas = vendas.filter((v) =>
-    matchStr(v.cliente_nome, busca)
-  );
+  const vendasFiltradas = vendas.filter((v) => matchStr(v.cliente_nome, busca));
 
   return (
     <div style={styles.container}>
-
       {/* LISTA */}
       <div style={styles.left}>
-
-        <div style={styles.header}>
-          <h2 style={{ margin: 0 }}>📜 Histórico de Vendas</h2>
-
-          <input
-            type="text"
-            placeholder="Buscar cliente..."
+        <div style={{ marginBottom: 16 }}>
+          <h2 style={{ margin: 0, marginBottom: 12 }}>📜 Histórico de Vendas</h2>
+          <Input
+            placeholder="🔍 Buscar cliente..."
             value={busca}
             onChange={(e) => setBusca(e.target.value)}
-            style={styles.input}
           />
         </div>
 
         <div style={styles.lista}>
-
-          {loading && (
-            <div style={styles.empty}>
-              Carregando vendas...
-            </div>
-          )}
+          {loading && <div style={styles.empty}>Carregando vendas...</div>}
 
           {!loading && vendasFiltradas.length === 0 && (
-            <div style={styles.empty}>
-              Nenhuma venda encontrada.
-            </div>
+            <div style={styles.empty}>Nenhuma venda encontrada.</div>
           )}
 
-          {vendasFiltradas.map((venda) => (
-            <div
-              key={venda.id}
-              style={{
-                ...styles.card,
-                border:
-                  vendaSelecionada?.id === venda.id
-                    ? "2px solid #0d7a45"
-                    : "1px solid #e2e8f0",
-              }}
-              onClick={() => abrirVenda(venda)}
-            >
-              <div style={styles.cardTop}>
-                <strong>Venda #{venda.id}</strong>
-
-                <span style={styles.pagamento}>
-                  {venda.pagamento}
-                </span>
+          {vendasFiltradas.map((venda) => {
+            const ativa = vendaSelecionada?.id === venda.id;
+            return (
+              <div
+                key={venda.id}
+                onClick={() => abrirVenda(venda)}
+                style={{
+                  ...styles.card,
+                  border: `${ativa ? 2 : 1}px solid ${ativa ? colors.brand : colors.border}`,
+                }}
+              >
+                <div style={styles.cardTop}>
+                  <strong>Venda #{venda.id}</strong>
+                  <Tag variant="success">{venda.pagamento}</Tag>
+                </div>
+                <div style={styles.nome}>
+                  👤 {venda.cliente_nome || "Não identificado"}
+                </div>
+                <div style={styles.total}>{fmt(venda.total)}</div>
+                <div style={styles.data}>{fmtDataHora(venda.created_at)}</div>
               </div>
-
-              <div style={styles.nome}>
-                👤 {venda.cliente_nome || "Não identificado"}
-              </div>
-
-              <div style={styles.total}>
-                {fmt(venda.total)}
-              </div>
-
-              <div style={styles.data}>
-                {fmtDataHora(venda.created_at)}
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
 
       {/* DETALHES */}
       <div style={styles.right}>
-
         {!vendaSelecionada ? (
           <div style={styles.emptyRight}>
             <div style={{ fontSize: 48 }}>🧾</div>
@@ -117,66 +93,33 @@ export default function HistoricoVendas() {
           <>
             <div style={styles.detailHeader}>
               <div>
-                <h2 style={{ margin: 0 }}>
-                  Venda #{vendaSelecionada.id}
-                </h2>
-
+                <h2 style={{ margin: 0 }}>Venda #{vendaSelecionada.id}</h2>
                 <div style={styles.detailCliente}>
                   👤 {vendaSelecionada.cliente_nome || "Não identificado"}
                 </div>
               </div>
-
-              <div style={styles.detailTotal}>
-                {fmt(vendaSelecionada.total)}
-              </div>
+              <div style={styles.detailTotal}>{fmt(vendaSelecionada.total)}</div>
             </div>
 
             <div style={styles.infoBox}>
-              <Info
-                label="Pagamento"
-                value={vendaSelecionada.pagamento}
-              />
-
-              <Info
-                label="Recebido"
-                value={fmt(vendaSelecionada.recebido)}
-              />
-
-              <Info
-                label="Troco"
-                value={fmt(vendaSelecionada.troco)}
-              />
-
-              <Info
-                label="Data"
-                value={new Date(
-                  vendaSelecionada.created_at
-                ).toLocaleString("pt-BR")}
-              />
+              <Info label="Pagamento" value={vendaSelecionada.pagamento} />
+              <Info label="Recebido"  value={fmt(vendaSelecionada.recebido)} />
+              <Info label="Troco"     value={fmt(vendaSelecionada.troco)} />
+              <Info label="Data"      value={fmtDataHora(vendaSelecionada.created_at)} />
             </div>
 
             <div style={styles.itensBox}>
-              <h3 style={{ marginTop: 0 }}>
-                Produtos
-              </h3>
-
+              <h3 style={{ marginTop: 0 }}>Produtos</h3>
               {itensVenda.map((item) => (
                 <div key={item.id} style={styles.item}>
                   <div>
-                    <strong>
-                      {item.produtos?.nome}
-                    </strong>
-
+                    <strong>{item.produtos?.nome}</strong>
                     <div style={styles.itemQtd}>
                       {item.quantidade}x unidade(s)
                     </div>
                   </div>
-
                   <div style={styles.itemPreco}>
-                    {fmt(
-                      item.preco_unitario *
-                        item.quantidade
-                    )}
+                    {fmt(item.preco_unitario * item.quantidade)}
                   </div>
                 </div>
               ))}
@@ -191,13 +134,8 @@ export default function HistoricoVendas() {
 function Info({ label, value }) {
   return (
     <div style={styles.infoItem}>
-      <div style={styles.infoLabel}>
-        {label}
-      </div>
-
-      <div style={styles.infoValue}>
-        {value}
-      </div>
+      <div style={styles.infoLabel}>{label}</div>
+      <div style={styles.infoValue}>{value}</div>
     </div>
   );
 }
@@ -207,94 +145,51 @@ const styles = {
     display: "grid",
     gridTemplateColumns: "360px 1fr",
     gap: 20,
-    padding: 20,
     minHeight: "100vh",
-    background: "#f1f5f9",
   },
-
   left: {
-    background: "#fff",
-    borderRadius: 14,
+    background: colors.surface,
+    borderRadius: radius.xl,
     padding: 20,
     display: "flex",
     flexDirection: "column",
+    boxShadow: shadow.card,
   },
-
   right: {
-    background: "#fff",
-    borderRadius: 14,
+    background: colors.surface,
+    borderRadius: radius.xl,
     padding: 24,
     overflowY: "auto",
+    boxShadow: shadow.card,
   },
-
-  header: {
-    marginBottom: 16,
-  },
-
-  input: {
-    width: "100%",
-    marginTop: 12,
-    padding: "10px 12px",
-    borderRadius: 8,
-    border: "1px solid #cbd5e1",
-    fontSize: 14,
-    boxSizing: "border-box",
-  },
-
   lista: {
     display: "flex",
     flexDirection: "column",
     gap: 12,
     overflowY: "auto",
   },
-
   card: {
-    background: "#fff",
-    borderRadius: 12,
+    background: colors.surface,
+    borderRadius: radius.xl,
     padding: 14,
     cursor: "pointer",
-    transition: ".15s",
+    transition: "all .15s",
   },
-
   cardTop: {
     display: "flex",
     justifyContent: "space-between",
+    alignItems: "center",
     marginBottom: 10,
   },
-
-  pagamento: {
-    background: "#ecfdf5",
-    color: "#0d7a45",
-    padding: "4px 10px",
-    borderRadius: 999,
-    fontSize: 12,
-    fontWeight: 700,
-  },
-
-  nome: {
-    fontSize: 14,
-    color: "#475569",
-  },
-
+  nome: { fontSize: 14, color: colors.textMuted },
   total: {
     fontSize: 24,
     fontWeight: 800,
-    color: "#0f172a",
+    color: colors.text,
     marginTop: 12,
   },
-
-  data: {
-    marginTop: 8,
-    fontSize: 12,
-    color: "#94a3b8",
-  },
-
-  empty: {
-    padding: 30,
-    textAlign: "center",
-    color: "#94a3b8",
-  },
-
+  data: { marginTop: 8, fontSize: 12, color: colors.textFaint },
+  empty: { padding: 30, textAlign: "center", color: colors.textFaint },
   emptyRight: {
     height: "100%",
     display: "flex",
@@ -302,74 +197,51 @@ const styles = {
     justifyContent: "center",
     flexDirection: "column",
     gap: 12,
-    color: "#94a3b8",
+    color: colors.textFaint,
   },
-
   detailHeader: {
     display: "flex",
     justifyContent: "space-between",
     alignItems: "center",
     marginBottom: 24,
   },
-
-  detailCliente: {
-    color: "#64748b",
-    marginTop: 4,
-  },
-
+  detailCliente: { color: colors.textSubtle, marginTop: 4 },
   detailTotal: {
     fontSize: 30,
     fontWeight: 800,
-    color: "#0d7a45",
+    color: colors.brand,
+    fontFamily: "monospace",
   },
-
   infoBox: {
     display: "grid",
     gridTemplateColumns: "repeat(auto-fit, minmax(180px,1fr))",
     gap: 12,
     marginBottom: 24,
   },
-
   infoItem: {
-    background: "#f8fafc",
-    border: "1px solid #e2e8f0",
-    borderRadius: 10,
+    background: colors.surfaceAlt,
+    border: `1px solid ${colors.border}`,
+    borderRadius: radius.lg,
     padding: 14,
   },
-
-  infoLabel: {
-    fontSize: 12,
-    color: "#64748b",
-    marginBottom: 6,
-  },
-
-  infoValue: {
-    fontWeight: 700,
-    color: "#0f172a",
-  },
-
+  infoLabel: { fontSize: 12, color: colors.textSubtle, marginBottom: 6 },
+  infoValue: { fontWeight: 700, color: colors.text },
   itensBox: {
-    border: "1px solid #e2e8f0",
-    borderRadius: 12,
+    border: `1px solid ${colors.border}`,
+    borderRadius: radius.xl,
     padding: 18,
   },
-
   item: {
     display: "flex",
     justifyContent: "space-between",
     alignItems: "center",
     padding: "12px 0",
-    borderBottom: "1px solid #f1f5f9",
+    borderBottom: `1px solid ${colors.surfaceMute}`,
   },
-
-  itemQtd: {
-    fontSize: 13,
-    color: "#64748b",
-    marginTop: 4,
-  },
-
+  itemQtd: { fontSize: 13, color: colors.textSubtle, marginTop: 4 },
   itemPreco: {
     fontWeight: 700,
-    color: "#0d7a45",
+    color: colors.brand,
+    fontFamily: "monospace",
   },
 };
