@@ -25,10 +25,12 @@
 | Linter | ESLint | ^10.2.1 |
 
 **Recursos especiais:**
-- QR Code para pagamentos PIX (`react-qr-code`)
-- RLS (Row Level Security) no Supabase
+- QR Code para pagamentos PIX via API pública (`api.qrserver.com`, sem lib instalada)
+- Identidade visual própria — fonte Outfit (Google Fonts) + logo SVG bicolor
+- RLS (Row Level Security) estrito no Supabase, isolado por `farmacia_id`
 - Multi-tenancy com autenticação por organização
-- Role-based access control (RBAC)
+- Role-based access control (`owner`, `farmaceutico`, `atendente`)
+- Edge Function pra envio de email de convite (Resend)
 
 ---
 
@@ -86,15 +88,34 @@ src/
 │   └── anvisa.service.js           # Validações de medicamentos
 ├── lib/                             # Utilitários puros
 │   ├── supabase.js                 # Cliente Supabase instanciado
-│   ├── format.js                   # Formatação (BRL, datas, etc)
-│   └── pagamentos.js               # Helpers de formas pagamento
-├── ui/                              # Custom hooks + componentes simples
-│   ├── Auth.jsx                    # useAuth() hook (context)
-│   ├── Toast.jsx                   # useToast() hook (notificações)
-│   ├── Logo.jsx                    # Logo do app
-│   └── ...outros primitivos
-├── styles/                          # CSS global
-└── main.jsx                         # Entry point
+│   ├── format.js                   # fmt, parseBRL, matchStr, fmtData/Hora
+│   └── pagamentos.js               # FORMAS_PAGAMENTO + calcAtalhosNotas
+├── ui/                              # Primitives + hooks de contexto
+│   ├── Auth.jsx                    # AuthProvider + useAuth() (sessão, profile, permissoes)
+│   ├── Toast.jsx                   # ToastProvider + useToast()
+│   ├── Logo.jsx                    # Pílula bicolor SVG (uso em sidebar)
+│   ├── LogoCompleto.jsx            # Composição "Farma [pílula] fy" (login screen)
+│   ├── Button.jsx                  # variants: primary | ghost | danger | warning | info
+│   ├── Input.jsx                   # input padronizado com tokens
+│   ├── Field.jsx                   # label uppercase + child input
+│   ├── Tag.jsx                     # variants: success | danger | warning | info | neutral
+│   ├── Modal.jsx                   # overlay + container + footer
+│   └── Tabs.jsx                    # barra horizontal de abas
+├── styles/
+│   └── tokens.js                   # paleta + raios + sombras + fontSize
+└── main.jsx                         # Envolve App em <ToastProvider><AuthProvider>
+
+supabase/                            # Migrações SQL e Edge Functions
+├── auth_multitenant.sql            # Tabelas farmacias/profiles + RLS por farmacia_id
+├── finalizar_venda.sql             # RPC atômica venda + itens + estoque
+├── financeiro.sql                  # Tabelas despesas, caixa_sessoes, caixa_movimentacoes
+├── equipe.sql                      # Tabela convites + função setup_inicial
+├── roles.sql                       # current_user_role() + policies owner_only no financeiro
+├── configuracoes.sql               # Colunas extras em farmacias (endereço, PIX, telefone)
+├── vincular_dados_existentes.sql   # Script único pós-signup (legado)
+└── functions/
+    └── enviar-convite/
+        └── index.ts                # Edge Function — envia email via Resend
 ```
 
 ---
@@ -105,10 +126,13 @@ src/
 
 **Autenticação & Segurança:**
 - Signup/Login com email + senha
-- Multi-tenancy (cada usuário = uma farmácia)
-- Supabase Auth + RLS
-- Role-based permissions (admin, gerente, vendedor)
-- Convites de equipe por email
+- Multi-tenancy (cada usuário = uma farmácia, isolada por `farmacia_id`)
+- Supabase Auth + RLS estrito em todas as tabelas
+- Role-based permissions: `owner`, `farmaceutico`, `atendente`
+  - `owner`: acesso total (incluindo Financeiro, Equipe, Configurações)
+  - `farmaceutico`: tudo exceto Financeiro/Equipe; pode CRUD em produtos
+  - `atendente`: PDV, ler produtos, CRUD clientes (sem excluir), Relatórios
+- Convites de equipe por email (Edge Function via Resend, opcional)
 
 **PDV (Ponto de Venda):**
 - Busca rápida de produtos
@@ -249,25 +273,35 @@ npm run preview
 
 ### Tabelas principais
 
-| Tabela | Descrição | Owner |
-|--------|-----------|-------|
-| `auth.users` | Usuários (Supabase Auth) | Sistema |
-| `profiles` | Profile de cada usuário (farmacia_id, role) | User |
-| `farmacias` | Dados das organizações (nome, chave PIX) | User (owner) |
-| `produtos` | Catálogo (nome, preço, estoque) | Farmacia |
-| `clientes` | Clientes (nome, CPF, contato) | Farmacia |
-| `vendas` | Histórico de vendas | Farmacia |
-| `itens_venda` | Itens de cada venda | Venda |
-| `forma_pagamento` | Dinheiro/cartão/PIX/fiado de cada venda | Venda |
-| `caixa` | Movimentação de caixa | Farmacia |
-| `despesas` | Registro de despesas | Farmacia |
-| `equipe` | Membros (com roles) | Farmacia |
-| `convites_equipe` | Convites pendentes | Farmacia |
+| Tabela | Descrição | IDs |
+|--------|-----------|-----|
+| `auth.users` | Usuários (Supabase Auth) | uuid |
+| `profiles` | 1 user = 1 profile = 1 farmacia_id + role | id=uuid (auth.users), farmacia_id=bigint |
+| `farmacias` | Organizações (nome, cnpj, endereço, chave_pix, etc) | bigint |
+| `produtos` | Catálogo (nome, preço, estoque, validade) | uuid |
+| `clientes` | Clientes (nome, telefone, observações) | bigint |
+| `vendas` | Histórico (cliente_id, total, pagamento, fiado_quitado_em) | bigint |
+| `itens_venda` | Itens de cada venda (produto_id uuid, venda_id bigint) | bigint |
+| `despesas` | Contas a pagar (descrição, valor, vencimento, pago) | bigint |
+| `caixa_sessoes` | Abertura/fechamento de caixa do dia | bigint |
+| `caixa_movimentacoes` | Sangrias e suprimentos vinculados à sessão | bigint |
+| `convites` | Convites pendentes (email + role + farmacia_id) | bigint |
 
-### RLS (Row Level Security)
-- **Vendedor:** Só lê/cria vendas próprias
-- **Gerente:** Acesso total à farmácia
-- **Admin:** Acesso total (inclusive financeiro)
+> **Atenção:** `pagamento` é uma string em `vendas.pagamento` (ex: "PIX + Dinheiro"),
+> NÃO uma tabela separada. Não existe tabela `equipe` — equipe = `profiles`
+> filtrado pela farmácia atual.
+
+### RLS por role
+- **owner**: tudo (Financeiro/Caixa/Despesas via policy `owner_only`)
+- **farmaceutico**: tudo exceto tabelas financeiras
+- **atendente**: leitura geral + insert/update em vendas, sem excluir
+
+### Funções SQL importantes
+- `current_user_farmacia_id()` — pega `farmacia_id` do profile do user logado
+- `current_user_role()` — pega role do profile
+- `setup_inicial(nome_user, nome_farmacia)` — chamada no signup. Detecta convite
+   pendente pelo email; senão cria farmácia nova
+- `finalizar_venda(...)` — RPC atômica: insere venda + itens + debita estoque
 
 ---
 
@@ -275,10 +309,20 @@ npm run preview
 
 ```env
 VITE_SUPABASE_URL=https://your-project.supabase.co
-VITE_SUPABASE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+VITE_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 ```
 
 Nunca commitar `.env.local` — adicionar ao `.gitignore` ✓
+
+> A antiga `VITE_PIX_KEY` foi removida — chave PIX agora vive em `farmacias.chave_pix`,
+> editável pela tela de Configurações. Só `VITE_SUPABASE_URL` e
+> `VITE_SUPABASE_ANON_KEY` são obrigatórias.
+
+### Edge Function (Resend) — secrets
+Configuradas no painel Supabase → Edge Functions → Manage secrets:
+- `RESEND_API_KEY` — chave da conta Resend
+- `APP_URL` — URL do app (ex: `http://localhost:5173` em dev)
+- `FROM_EMAIL` — opcional (default `FarmaFy <onboarding@resend.dev>`)
 
 ---
 
@@ -309,11 +353,15 @@ Nunca commitar `.env.local` — adicionar ao `.gitignore` ✓
 ## 🐛 Debug e troubleshooting
 
 ### "Sua conta existe mas não tem farmácia vinculada"
-→ Logout e refaça cadastro completo, OU insira manualmente no Supabase:
+→ Logout e refaça cadastro completo, OU vincule manualmente no Supabase:
 ```sql
-INSERT INTO farmacias (owner_id, nome) 
-VALUES ('user-uuid', 'Minha Farmácia');
+-- 1. Cria a farmácia
+INSERT INTO farmacias (nome) VALUES ('Minha Farmácia') RETURNING id;
+-- 2. Cria o profile linkado ao seu auth.uid (pegue em Authentication → Users)
+INSERT INTO profiles (id, farmacia_id, nome, role)
+VALUES ('user-uuid', <farmacia_id_do_passo_1>, 'Seu Nome', 'owner');
 ```
+A vinculação é via `profiles`, não via campo `owner_id` (não existe).
 
 ### Permissão negada ao acessar dados
 → Verificar RLS no Supabase console
