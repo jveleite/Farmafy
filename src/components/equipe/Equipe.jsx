@@ -53,8 +53,10 @@ export default function Equipe() {
     if (!email.includes("@")) return toast("Email inválido.", "erro");
     setSalvando(true);
     try {
-      await convidarUsuario(email, role);
-      toast(`Convite criado para ${email}`);
+      const res = await convidarUsuario(email, role);
+      toast(res.emailEnviado
+        ? `📧 Convite enviado para ${email}`
+        : `Convite criado. Email não saiu — avise ${email} manualmente.`);
       setModal(false);
       setEmail("");
       setRole("atendente");

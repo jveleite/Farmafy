@@ -38,13 +38,39 @@ export async function convidarUsuario(email, role) {
   const limpo = String(email).trim().toLowerCase();
   if (!limpo) throw new Error("Email inválido");
 
+  const { data: { user } } = await supabase.auth.getUser();
+
+  // 1. Insere convite no banco — fonte da verdade.
+  //    Mesmo se o email falhar, o convite existe e o signup vai reconhecer.
   const { error } = await supabase.from("convites").insert({
     email: limpo,
     role,
-    // farmacia_id e created_by entram via defaults / sessão
-    created_by: (await supabase.auth.getUser()).data.user?.id,
+    created_by: user?.id,
   });
   if (error) throw error;
+
+  // 2. Tenta disparar email via Edge Function (opcional — se a função
+  //    `enviar-convite` não estiver deployada, retorna erro silencioso).
+  try {
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("nome, farmacias(nome)")
+      .eq("id", user.id)
+      .maybeSingle();
+
+    const { error: eFn } = await supabase.functions.invoke("enviar-convite", {
+      body: {
+        email: limpo,
+        farmaciaNome: profile?.farmacias?.nome || "sua farmácia",
+        convidadoPor: profile?.nome || user.email,
+      },
+    });
+    if (eFn) throw eFn;
+    return { emailEnviado: true };
+  } catch (e) {
+    console.warn("Email de convite não enviado:", e);
+    return { emailEnviado: false };
+  }
 }
 
 export async function cancelarConvite(id) {
