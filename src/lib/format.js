@@ -5,8 +5,20 @@ export const fmt = (v) =>
     currency: "BRL",
   });
 
-export const parseBRL = (str) =>
-  parseFloat(String(str).replace(/\./g, "").replace(",", ".")) || 0;
+// Aceita os dois formatos:
+//   - BR: "1.500,50" (vírgula decimal, ponto milhar) → 1500.50
+//   - JS: "1500.50"  (ponto decimal, vindo de input type=number ou toFixed) → 1500.50
+export const parseBRL = (str) => {
+  if (str == null) return 0;
+  const s = String(str).trim();
+  if (!s) return 0;
+  // Se tem vírgula, é formato BR — remove pontos (milhar) e troca vírgula por ponto.
+  if (s.includes(",")) {
+    return parseFloat(s.replace(/\./g, "").replace(",", ".")) || 0;
+  }
+  // Sem vírgula: é número JS direto (parseFloat aceita "15.00", "1500", etc).
+  return parseFloat(s) || 0;
+};
 
 // ─── Datas ───────────────────────────────────────────────────────────────────
 export const fmtData = (d) => {
