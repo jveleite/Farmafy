@@ -44,6 +44,9 @@ export default function TelaAuth() {
     if (!email || !senha || !nomeUser) {
       return toast("Preencha email, senha e nome.", "erro");
     }
+    if (!nomeFarmacia.trim()) {
+      return toast("Informe o nome da farmácia. Se foi convidado, use o link do email de convite.", "erro");
+    }
     if (senha.length < 6) {
       return toast("Senha tem que ter pelo menos 6 caracteres.", "erro");
     }
@@ -96,7 +99,7 @@ export default function TelaAuth() {
               </Field>
               <Field label="Nome da farmácia">
                 <Input value={nomeFarmacia} onChange={(e) => setNomeFarmacia(e.target.value)}
-                  placeholder="Deixe em branco se foi convidado" />
+                  placeholder="Ex: Farmácia Central" />
               </Field>
             </>
           )}
