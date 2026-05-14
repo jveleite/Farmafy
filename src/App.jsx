@@ -1,5 +1,6 @@
 import { useState } from 'react'
 
+import Dashboard from './components/dashboard/Dashboard'
 import Produtos from './components/Produtos'
 import Clientes from './components/Clientes'
 import PDV from './components/pdv/PDV'
@@ -18,7 +19,7 @@ import Logo from './ui/Logo'
 export default function App() {
   const { sessao, profile, permissoes, loading } = useAuth()
   const toast = useToast()
-  const [tela, setTela] = useState('pdv')
+  const [tela, setTela] = useState('dashboard')
 
   // ── Boot inicial ──────────────────────────────────────────────────
   if (loading) {
@@ -68,6 +69,7 @@ export default function App() {
     if (tela === 'configuracoes' && !permissoes.veEquipe)     return <SemPermissao />
 
     switch (tela) {
+      case 'dashboard':     return <Dashboard />
       case 'produtos':      return <Produtos />
       case 'clientes':      return <Clientes />
       case 'pdv':           return <PDV />
@@ -92,6 +94,7 @@ export default function App() {
           <div style={styles.farmaciaNome}>{profile.farmaciaNome}</div>
 
           <nav style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 24 }}>
+            <ItemMenu icon="🏠" label="Início"             ativo={tela==='dashboard'}  onClick={() => setTela('dashboard')} />
             <ItemMenu icon="🛒" label="PDV"                ativo={tela==='pdv'}        onClick={() => setTela('pdv')} />
             <ItemMenu icon="🧾" label="Histórico de Vendas" ativo={tela==='historico'}  onClick={() => setTela('historico')} />
             <ItemMenu icon="📦" label="Produtos"           ativo={tela==='produtos'}   onClick={() => setTela('produtos')} />
