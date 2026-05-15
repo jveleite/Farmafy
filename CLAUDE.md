@@ -1,7 +1,7 @@
 # CLAUDE.md - Farmafy
 
-**Última atualização:** 2026-05-13  
-**Versão do projeto:** 0.0.0 (development)
+**Última atualização:** 2026-05-15  
+**Versão do projeto:** 0.0.0 (production)
 
 ---
 
@@ -9,7 +9,7 @@
 
 **Farmafy** é um sistema web de gerenciamento de farmácia (PDV + administrativo) desenvolvido para portfólio. Simula funcionalidades reais de um sistema comercial completo, com foco em arquitetura escalável e experiência do usuário.
 
-**Status:** Em desenvolvimento ativo | **Produção:** Não (localhost apenas)
+**Status:** Em desenvolvimento ativo | **Produção:** ✅ https://farmafy-rust.vercel.app/
 
 ---
 
@@ -229,6 +229,7 @@ User Action → Component → Service → Supabase → RLS check → DB
 | **React Context para Auth** | Simples, evita prop drilling, sincroniza sessão globalmente |
 | **Services centralizadas** | Reutilização de queries, testes mais fáceis |
 | **RPC para vendas** | Transação atômica: desconta estoque + insere venda simultaneamente |
+| **Vercel** | Deploy automático via GitHub, CDN global, free tier generoso para SPAs |
 
 ---
 
@@ -266,6 +267,18 @@ npm run build
 # Gera /dist pronto para deploy
 npm run preview
 ```
+
+### Deploy (Vercel)
+
+O projeto está conectado ao Vercel via GitHub. Todo `push` na branch `main` dispara um redeploy automático.
+
+- **URL de produção:** https://farmafy-rust.vercel.app/
+- **Plataforma:** Vercel (free tier)
+- **Config:** `vercel.json` na raiz — define build Vite + rewrites SPA
+- **Env vars no Vercel:** `VITE_SUPABASE_URL` e `VITE_SUPABASE_ANON_KEY` (configuradas no painel Vercel → Settings → Environment Variables)
+- **Supabase Auth:** Site URL e Redirect URL configurados para `https://farmafy-rust.vercel.app/` em Authentication → URL Configuration
+
+> ⚠️ Email confirmation está **desativado** no Supabase (Authentication → Providers → Email → "Confirm email" OFF) para simplificar o fluxo. Reativar em produção real com SMTP próprio (ex: Resend).
 
 ---
 
@@ -328,12 +341,14 @@ Configuradas no painel Supabase → Edge Functions → Manage secrets:
 
 ## 📈 Roadmap Futuro (Prioridade)
 
-1. **MVP v1** (Agora)
+1. **MVP v1** (Concluído)
    - PDV funcional ✓
    - Financeiro básico ✓
    - Equipe + permissões ✓
+   - Deploy em produção (Vercel) ✓
 
 2. **v1.1** (Próximo)
+   - Testes em produção (fluxo completo PDV, financeiro, configurações)
    - Melhorias UI/UX
    - Testes automatizados
    - Performance optimization
@@ -344,7 +359,6 @@ Configuradas no painel Supabase → Edge Functions → Manage secrets:
    - API pública para integrações
 
 4. **v2.0** (Longo prazo)
-   - Deployment em produção
    - Plano pago + free tier
    - Marketplace de integrações
 
@@ -353,7 +367,10 @@ Configuradas no painel Supabase → Edge Functions → Manage secrets:
 ## 🐛 Debug e troubleshooting
 
 ### "Sua conta existe mas não tem farmácia vinculada"
-→ Logout e refaça cadastro completo, OU vincule manualmente no Supabase:
+Causa raiz: `setup_inicial` falhou após o `signUp()` — auth user criado mas sem profile.
+Isso pode acontecer se o usuário não informar nome da farmácia e não tiver convite pendente.
+
+**Fix aplicado (2026-05-15):** `TelaAuth.jsx` agora valida `nomeFarmacia` antes de chamar o signup, impedindo o estado órfão. Se o estado ocorrer mesmo assim, limpar manualmente:
 ```sql
 -- 1. Cria a farmácia
 INSERT INTO farmacias (nome) VALUES ('Minha Farmácia') RETURNING id;
@@ -363,6 +380,14 @@ VALUES ('user-uuid', <farmacia_id_do_passo_1>, 'Seu Nome', 'owner');
 ```
 A vinculação é via `profiles`, não via campo `owner_id` (não existe).
 
+> Usuário órfão (auth sem profile) pode ser deletado em Supabase → Authentication → Users.
+
+### 400 no signup (produção)
+Causas mais comuns:
+- **Rate limit de email** do Supabase free tier (~3-4 emails/hora). Aguardar ou desativar confirmação de email.
+- **`nomeFarmacia` vazio** sem convite pendente → RPC `setup_inicial` retorna 400. Já corrigido no frontend.
+- **Env vars erradas** no Vercel → verificar `VITE_SUPABASE_URL` e `VITE_SUPABASE_ANON_KEY` em Settings → Environment Variables.
+
 ### Permissão negada ao acessar dados
 → Verificar RLS no Supabase console
 → Confirmar `farmacia_id` correto no profile
@@ -370,6 +395,10 @@ A vinculação é via `profiles`, não via campo `owner_id` (não existe).
 ### Estoque não desconta após venda
 → Verificar se RPC `finalizarVenda` foi executada com sucesso
 → Checar logs de erro no console do navegador
+
+### Login redireciona errado após auth (produção)
+→ Verificar Supabase → Authentication → URL Configuration
+→ Site URL e Redirect URL devem apontar para `https://farmafy-rust.vercel.app/`
 
 ---
 
@@ -387,17 +416,21 @@ Ao trabalhar nesse projeto:
 
 - **Tokens de sessão:** Supabase gerencia automaticamente
 - **Rates do Supabase:** Free tier com limites generosos (até 50k requisições/mês)
-- **Dados sensíveis:** PIX key, CPF guardados no Supabase (usar HTTPS em produção)
+- **Dados sensíveis:** PIX key, CPF guardados no Supabase (usar HTTPS em produção — Vercel já usa)
 - **Offline:** App requer conexão (não há sync offline)
 - **Moeda:** Tudo em BRL, formatação em `lib/format.js`
+- **Email confirmation:** Desativado no Supabase pra simplificar testes. Reativar com SMTP próprio antes de abrir para usuários reais.
+- **vercel.json:** Necessário para rewrites SPA — sem ele, reload em qualquer rota retorna 404.
 
 ---
 
 ## 🔗 Referências rápidas
 
+- App em produção: https://farmafy-rust.vercel.app/
 - Documentação Supabase: https://supabase.com/docs
 - React 19 Docs: https://react.dev
 - Vite Guide: https://vitejs.dev/guide/
+- Vercel Dashboard: https://vercel.com/dashboard
 - ESLint Config: `/eslint.config.js`
 
 ---
